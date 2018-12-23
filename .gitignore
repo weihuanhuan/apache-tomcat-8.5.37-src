@@ -47,3 +47,5 @@ webapps/docs/jdbc-pool.xml
 *.*~
 !build.properties
 !tomcat-build-libs/
+!java/org/apache/catalina/startup/catalina.properties
+!webapps/docs/jdbc-pool.xml
