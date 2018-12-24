@@ -44,7 +44,7 @@ webapps/docs/jdbc-pool.xml
 
 #JF
 *.swp
-*.*~
+*~
 !build.properties
 !tomcat-build-libs/
 !java/org/apache/catalina/startup/catalina.properties
