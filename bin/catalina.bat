@@ -197,7 +197,8 @@ set "CATALINA_TMPDIR=%CATALINA_BASE%\temp"
 rem Add tomcat-juli.jar to classpath
 rem tomcat-juli.jar can be over-ridden per instance
 if not exist "%CATALINA_BASE%\bin\tomcat-juli.jar" goto juliClasspathHome
-set "CLASSPATH=%CLASSPATH%;%CATALINA_BASE%\bin\tomcat-juli.jar"
+rem //JF add disruptor jar
+set "CLASSPATH=%CLASSPATH%;%CATALINA_BASE%\bin\tomcat-juli.jar;%CATALINA_HOME%\bin\disruptor.jar"
 goto juliClasspathDone
 :juliClasspathHome
 set "CLASSPATH=%CLASSPATH%;%CATALINA_HOME%\bin\tomcat-juli.jar"
@@ -206,11 +207,12 @@ set "CLASSPATH=%CLASSPATH%;%CATALINA_HOME%\bin\tomcat-juli.jar"
 if not "%JSSE_OPTS%" == "" goto gotJsseOpts
 set JSSE_OPTS="-Djdk.tls.ephemeralDHKeySize=2048"
 :gotJsseOpts
-set "JAVA_OPTS=%JAVA_OPTS% %JSSE_OPTS%"
+rem //JF  add debug option
+set "JAVA_OPTS=%JAVA_OPTS% %JSSE_OPTS% -Xdebug -Xrunjdwp:transport=dt_socket,server=y,address=28003,suspend=n"
 
 rem Register custom URL handlers
 rem Do this here so custom URL handles (specifically 'war:...') can be used in the security policy
-set "JAVA_OPTS=%JAVA_OPTS% -Djava.protocol.handler.pkgs=org.apache.catalina.webresources"
+set "JAVA_OPTS=%JAVA_OPTS% -Djava.protocol.handler.pkgs=org.apache.catalina.webresources" 
 
 if not "%LOGGING_CONFIG%" == "" goto noJuliConfig
 set LOGGING_CONFIG=-Dnop

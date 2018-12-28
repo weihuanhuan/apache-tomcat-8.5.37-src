@@ -204,6 +204,8 @@
   <!-- Classpaths -->
   <path id="compile.classpath">
     <pathelement location="${jdt.jar}"/>
+    <!--//JF disruptor jar-->
+    <pathelement location="${disruptor.jar}"/>
   </path>
 
   <path id="tomcat.classpath">
@@ -1027,6 +1029,8 @@
           description="Default. Builds a working Tomcat instance">
 
     <copy tofile="${tomcat.build}/bin/commons-daemon.jar" file="${commons-daemon.jar}" />
+    <!--//JF copy disruptor jar  -->
+    <copy tofile="${tomcat.build}/bin/disruptor.jar" file="${disruptor.jar}" />
 
     <!-- Copy scripts -->
     <copy todir="${tomcat.build}/bin">
