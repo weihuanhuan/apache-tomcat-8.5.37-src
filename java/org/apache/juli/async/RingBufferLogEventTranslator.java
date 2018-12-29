@@ -30,11 +30,12 @@ public class RingBufferLogEventTranslator implements
         EventTranslator<RingBufferLogEvent> {
 
     private AsyncDirectJDKLog asyncDirectJDKLog;
-    String loggerName;
-    public String fqcn;
+    private String loggerName;
+
     public Level level;
     public LogRecord message;
     public Throwable thrown;
+
     private long threadId = Thread.currentThread().getId();
     private String threadName = Thread.currentThread().getName();
     private int threadPriority = Thread.currentThread().getPriority();
@@ -42,7 +43,7 @@ public class RingBufferLogEventTranslator implements
     @Override
     public void translateTo(final RingBufferLogEvent event, final long sequence) {
 
-        event.setValues(asyncDirectJDKLog, loggerName, fqcn, level, message, thrown,
+        event.setValues(asyncDirectJDKLog, loggerName, level, message, thrown,
                 threadId, threadName, threadPriority);
 
         clear(); // clear the translator
@@ -52,17 +53,16 @@ public class RingBufferLogEventTranslator implements
      * Release references held by this object to allow objects to be garbage-collected.
      */
     private void clear() {
-        setBasicValues(null, null, null, null, null, null);
+        setBasicValues(null, null, null, null, null);
     }
 
-    public void setBasicValues(final AsyncDirectJDKLog anAsyncDirectJDKLog, final String aLoggerName,
-                               final String theFqcn, final Level aLevel, final LogRecord msg, final Throwable aThrowable) {
-        this.asyncDirectJDKLog = anAsyncDirectJDKLog;
-        this.loggerName = aLoggerName;
-        this.fqcn = theFqcn;
-        this.level = aLevel;
+    public void setBasicValues(final AsyncDirectJDKLog asyncDirectJDKLog, final String loggerName,
+                               final Level level, final LogRecord msg, final Throwable throwable) {
+        this.asyncDirectJDKLog = asyncDirectJDKLog;
+        this.loggerName = loggerName;
+        this.level = level;
         this.message = msg;
-        this.thrown = aThrowable;
+        this.thrown = throwable;
     }
 
     public void updateThreadValues() {

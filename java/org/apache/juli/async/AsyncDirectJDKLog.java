@@ -45,15 +45,15 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
         return result;
     }
 
-    public void logMessage(final String fqcn, final Level level, final String message,
+    public void logMessage(final Level level, final String message,
                            final Throwable thrown) {
 
         LogRecord lr = new LogRecord(level, message);
         if (loggerDisruptor.isUseThreadLocals()) {
-            logWithThreadLocalTranslator(fqcn, level, lr, thrown);
+            logWithThreadLocalTranslator(level, lr, thrown);
         } else {
             // LOG4J2-1172: avoid storing non-JDK classes in ThreadLocals to avoid memory leaks in web apps
-            logWithVarargTranslator(fqcn, level, lr, thrown);
+            logWithVarargTranslator(level, lr, thrown);
         }
     }
 
@@ -63,17 +63,16 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
      * This re-uses a {@code RingBufferLogEventTranslator} instance cached in a {@code ThreadLocal} to avoid creating
      * unnecessary objects with each event.
      *
-     * @param fqcn    fully qualified name of the caller
      * @param level   level at which the caller wants to log the message
      * @param message the log message
      * @param thrown  a {@code Throwable} or {@code null}
      */
-    private void logWithThreadLocalTranslator(final String fqcn, final Level level,
+    private void logWithThreadLocalTranslator(final Level level,
                                               final LogRecord message, final Throwable thrown) {
         // Implementation note: this method is tuned for performance. MODIFY WITH CARE!
 
         final RingBufferLogEventTranslator translator = getCachedTranslator();
-        initTranslator(translator, fqcn, level, message, thrown);
+        initTranslator(translator, level, message, thrown);
         initTranslatorThreadValues(translator);
         publish(translator);
     }
@@ -91,7 +90,7 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
                 loggerDisruptor.enqueueLogMessageInfo(translator);
                 break;
             case SYNCHRONOUS:
-                logMessageInCurrentThread(translator.fqcn, translator.level, translator.message,
+                logMessageInCurrentThread(translator.level, translator.message,
                         translator.thrown);
                 break;
             case DISCARD:
@@ -101,10 +100,10 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
         }
     }
 
-    private void initTranslator(final RingBufferLogEventTranslator translator, final String fqcn,
+    private void initTranslator(final RingBufferLogEventTranslator translator,
                                 final Level level, final LogRecord message, final Throwable thrown) {
 
-        translator.setBasicValues(this, this.getClass().getSimpleName(), fqcn, level, message, thrown);
+        translator.setBasicValues(this, this.getClass().getSimpleName(), level, message, thrown);
     }
 
     private void initTranslatorThreadValues(final RingBufferLogEventTranslator translator) {
@@ -121,12 +120,11 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
      * This creates a new varargs Object array for each invocation, but does not store any non-JDK classes in a
      * {@code ThreadLocal} to avoid memory leaks in web applications (see LOG4J2-1172).
      *
-     * @param fqcn    fully qualified name of the caller
      * @param level   level at which the caller wants to log the message
      * @param message the log message
      * @param thrown  a {@code Throwable} or {@code null}
      */
-    private void logWithVarargTranslator(final String fqcn, final Level level,
+    private void logWithVarargTranslator(final Level level,
                                          final LogRecord message, final Throwable thrown) {
         // Implementation note: candidate for optimization: exceeds 35 bytecodes.
 
@@ -136,14 +134,8 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
             return;
         }
         // calls the translateTo method on this AsyncDirectJDKLog
-        if (!disruptor.getRingBuffer().tryPublishEvent(this,
-                this, // asyncLogger: 0
-
-                fqcn, // 2
-                level, // 3// 4
-                message, // 5
-                thrown)) { // 6
-            handleRingBufferFull(fqcn, level, message, thrown);
+        if (!disruptor.getRingBuffer().tryPublishEvent(this, this, level, message, thrown)) {
+            handleRingBufferFull(level, message, thrown);
         }
     }
 
@@ -156,16 +148,14 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
     public void translateTo(final RingBufferLogEvent event, final long sequence, final Object... args) {
         // Implementation note: candidate for optimization: exceeds 35 bytecodes.
         final AsyncDirectJDKLog asyncDirectJDKLog = (AsyncDirectJDKLog) args[0];
-        final StackTraceElement location = (StackTraceElement) args[1];
-        final String fqcn = (String) args[2];
-        final Level level = (Level) args[3];
-        final LogRecord message = (LogRecord) args[5];
-        final Throwable thrown = (Throwable) args[6];
+        final Level level = (Level) args[1];
+        final LogRecord message = (LogRecord) args[2];
+        final Throwable thrown = (Throwable) args[3];
 
 
         final Thread currentThread = Thread.currentThread();
         final String threadName = THREAD_NAME_CACHING_STRATEGY.getThreadName();
-        event.setValues(asyncDirectJDKLog, FQCN, fqcn, level, message, thrown,
+        event.setValues(asyncDirectJDKLog, this.getClass().getSimpleName(), level, message, thrown,
                 currentThread.getId(), threadName, currentThread.getPriority());
     }
 
@@ -173,28 +163,27 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
      * LOG4J2-471: prevent deadlock when RingBuffer is full and object being logged calls Logger.log() from its
      * toString() method
      *
-     * @param fqcn    fully qualified caller name
      * @param level   log level
      * @param message log message
      * @param thrown  optional exception
      */
-    void logMessageInCurrentThread(final String fqcn, final Level level,
+    void logMessageInCurrentThread(final Level level,
                                    final LogRecord message, final Throwable thrown) {
         // bypass RingBuffer and invoke Appender directly
         logger.log(message);
     }
 
-    private void handleRingBufferFull(final String fqcn,
-                                      final Level level,
+    private void handleRingBufferFull(final Level level,
                                       final LogRecord msg,
                                       final Throwable thrown) {
         final EventRoute eventRoute = loggerDisruptor.getEventRoute(level);
         switch (eventRoute) {
             case ENQUEUE:
-                loggerDisruptor.getDisruptor().getRingBuffer().publishEvent(this, this, fqcn, level, msg, thrown);
+                loggerDisruptor.getDisruptor().getRingBuffer().
+                        publishEvent(this, this, level, msg, thrown);
                 break;
             case SYNCHRONOUS:
-                logMessageInCurrentThread(fqcn, level, msg, thrown);
+                logMessageInCurrentThread(level, msg, thrown);
                 break;
             case DISCARD:
                 break;
@@ -211,68 +200,122 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
      * @param event the event to log
      */
     public void actualAsyncLog(final RingBufferLogEvent event) {
-
-        logger.log(event.getMessage());
+        //JF logRecord message
+//        logger.log();
+        //JF message class method
+//        logger.logp();
+        //JF message class method resource
+//        logger.logrb();
+        logger.log(event.getLevel(), event.getMessage().getMessage(), event.getThrown());
     }
 
     @Override
     public final void debug(Object message) {
-        logMessage(FQCN, Level.FINE, String.valueOf(message), null);
+        logMessage(Level.FINE, String.valueOf(message), null);
     }
 
     @Override
     public final void debug(Object message, Throwable t) {
-        logMessage(FQCN, Level.FINE, String.valueOf(message), t);
+        logMessage(Level.FINE, String.valueOf(message), t);
     }
 
     @Override
     public final void trace(Object message) {
-        logMessage(FQCN, Level.FINER, String.valueOf(message), null);
+        logMessage(Level.FINER, String.valueOf(message), null);
     }
 
     @Override
     public final void trace(Object message, Throwable t) {
-        logMessage(FQCN, Level.FINER, String.valueOf(message), t);
+        logMessage(Level.FINER, String.valueOf(message), t);
     }
 
     @Override
     public final void info(Object message) {
-        logMessage(FQCN, Level.INFO, String.valueOf(message), null);
+        logMessage(Level.INFO, String.valueOf(message), null);
     }
 
     @Override
     public final void info(Object message, Throwable t) {
-        logMessage(FQCN, Level.INFO, String.valueOf(message), t);
+        logMessage(Level.INFO, String.valueOf(message), t);
     }
 
     @Override
     public final void warn(Object message) {
-        logMessage(FQCN, Level.WARNING, String.valueOf(message), null);
+        logMessage(Level.WARNING, String.valueOf(message), null);
     }
 
     @Override
     public final void warn(Object message, Throwable t) {
-        logMessage(FQCN, Level.WARNING, String.valueOf(message), t);
+        logMessage(Level.WARNING, String.valueOf(message), t);
     }
 
     @Override
     public final void error(Object message) {
-        logMessage(FQCN, Level.SEVERE, String.valueOf(message), null);
+        logMessage(Level.SEVERE, String.valueOf(message), null);
     }
 
     @Override
     public final void error(Object message, Throwable t) {
-        logMessage(FQCN, Level.SEVERE, String.valueOf(message), t);
+        logMessage(Level.SEVERE, String.valueOf(message), t);
     }
 
     @Override
     public final void fatal(Object message) {
-        logMessage(FQCN, Level.SEVERE, String.valueOf(message), null);
+        logMessage(Level.SEVERE, String.valueOf(message), null);
     }
 
     @Override
     public final void fatal(Object message, Throwable t) {
-        logMessage(FQCN, Level.SEVERE, String.valueOf(message), t);
+        logMessage(Level.SEVERE, String.valueOf(message), t);
+    }
+
+
+    public final void debug(String message) {
+        logMessage(Level.FINE, message, null);
+    }
+
+    public final void debug(String message, Throwable t) {
+        logMessage(Level.FINE, message, t);
+    }
+
+    public final void trace(String message) {
+        logMessage(Level.FINER, message, null);
+    }
+
+    public final void trace(String message, Throwable t) {
+        logMessage(Level.FINER, message, t);
+    }
+
+    public final void info(String message) {
+        logMessage(Level.INFO, message, null);
+    }
+
+    public final void info(String message, Throwable t) {
+        logMessage(Level.INFO, message, t);
+    }
+
+    public final void warn(String message) {
+        logMessage(Level.WARNING, message, null);
+    }
+
+    public final void warn(String message, Throwable t) {
+        logMessage(Level.WARNING, message, t);
+    }
+
+    public final void error(String message) {
+        logMessage(Level.SEVERE, message, null);
+    }
+
+    public final void error(String message, Throwable t) {
+        logMessage(Level.SEVERE, message, t);
+    }
+
+    public final void fatal(String message) {
+        logMessage(Level.SEVERE, message, null);
+    }
+
+    public final void fatal(String message, Throwable t) {
+        logMessage(Level.SEVERE, message, t);
     }
 
 }

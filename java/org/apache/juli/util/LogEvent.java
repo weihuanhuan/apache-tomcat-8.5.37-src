@@ -31,8 +31,6 @@ import java.util.logging.LogRecord;
  */
 public interface LogEvent extends Serializable {
 
-    Level getLevel();
-
     /**
      * Gets the logger name.
      *
@@ -40,21 +38,14 @@ public interface LogEvent extends Serializable {
      */
     String getLoggerName();
 
+    Level getLevel();
+
     /**
      * Gets the message associated with the event.
      *
      * @return message.
      */
     LogRecord getMessage();
-
-
-    /**
-     * Gets the thread name.
-     *
-     * @return thread name, may be null.
-     * TODO guess this could go into a thread context object too. (RG) Why?
-     */
-    String getThreadName();
 
     /**
      * Gets the thread ID.
@@ -65,15 +56,20 @@ public interface LogEvent extends Serializable {
     long getThreadId();
 
     /**
+     * Gets the thread name.
+     *
+     * @return thread name, may be null.
+     * TODO guess this could go into a thread context object too. (RG) Why?
+     */
+    String getThreadName();
+
+    /**
      * Gets the thread priority.
      *
      * @return thread priority.
      * @since 2.6
      */
     int getThreadPriority();
-
-
-    String getLoggerFqcn();
 
     /**
      * Returns {@code true} if this event is the last one in a batch, {@code false} otherwise. Used by asynchronous
@@ -82,9 +78,7 @@ public interface LogEvent extends Serializable {
      *
      * @return whether this event is the last one in a batch.
      */
-    // see also LOG4J2-164
     boolean isEndOfBatch();
-
 
     /**
      * Sets whether this event is the last one in a batch. Used by asynchronous Loggers and Appenders to signal to

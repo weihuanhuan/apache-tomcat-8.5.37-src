@@ -65,6 +65,9 @@ public class LogFactory {
 
     static {
         System.setProperty("AsyncDirectJDKLog", "true");
+        System.setProperty("java.util.logging.config.file",
+                "F:/JetBrains/IntelliJ IDEA/apache-tomcat-8.5.37-src/output/build/conf/logging.properties");
+        System.setProperty("java.util.logging.manager","org.apache.juli.ClassLoaderLogManager");
     }
 
     private static final LogFactory singleton = new LogFactory();

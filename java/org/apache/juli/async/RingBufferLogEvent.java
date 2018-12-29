@@ -24,60 +24,43 @@ import org.apache.juli.util.Strings;
 
 public class RingBufferLogEvent implements LogEvent {
 
-    public static final Factory FACTORY = new Factory();
-
     private static final long serialVersionUID = 8462119088943934758L;
+
+    public static final Factory FACTORY = new Factory();
     private static final LogRecord EMPTY = new LogRecord(Level.INFO, Strings.EMPTY);
 
+    private transient AsyncDirectJDKLog asyncDirectJDKLog;
+    private String loggerName;
+
+    private Level level;
+    private LogRecord message;
+    private transient Throwable thrown;
+
+    private long threadId;
+    private String threadName;
+    private int threadPriority;
+
+    private boolean endOfBatch = false;
 
     public RingBufferLogEvent() {
     }
 
-    private static class Factory implements EventFactory<RingBufferLogEvent> {
 
-        @Override
-        public RingBufferLogEvent newInstance() {
-            final RingBufferLogEvent result = new RingBufferLogEvent();
-            return result;
-        }
-    }
-
-    private int threadPriority;
-    private long threadId;
-    private boolean endOfBatch = false;
-    private Level level;
-    private String threadName;
-    private String loggerName;
-    private LogRecord message;
-    private transient Throwable thrown;
-    private String fqcn;
-
-    private transient AsyncDirectJDKLog asyncDirectJDKLog;
-
-    public void setValues(final AsyncDirectJDKLog anAsyncDirectJDKLog, final String aLoggerName,
-                          final String theFqcn, final Level aLevel, final LogRecord msg, final Throwable aThrowable,
+    public void setValues(final AsyncDirectJDKLog asyncDirectJDKLog, final String loggerName,
+                          final Level level, final LogRecord msg, final Throwable throwable,
                           final long threadId, final String threadName, final int threadPriority) {
+
+        this.asyncDirectJDKLog = asyncDirectJDKLog;
+        this.loggerName = loggerName;
+
+        this.level = level;
+        this.message = msg;
+        this.thrown = throwable;
+
         this.threadPriority = threadPriority;
         this.threadId = threadId;
-        this.level = aLevel;
         this.threadName = threadName;
-        this.loggerName = aLoggerName;
-        setMessage(msg);
-        this.thrown = aThrowable;
-        this.fqcn = theFqcn;
-        this.asyncDirectJDKLog = anAsyncDirectJDKLog;
     }
-
-
-    @Override
-    public String getLoggerFqcn() {
-        return fqcn;
-    }
-
-    private void setMessage(final LogRecord msg) {
-        this.message = msg;
-    }
-
 
     /**
      * Event processor that reads the event from the ringbuffer can call this method.
@@ -89,27 +72,10 @@ public class RingBufferLogEvent implements LogEvent {
         asyncDirectJDKLog.actualAsyncLog(this);
     }
 
-    /**
-     * Returns {@code true} if this event is the end of a batch, {@code false} otherwise.
-     *
-     * @return {@code true} if this event is the end of a batch, {@code false} otherwise
-     */
-    @Override
-    public boolean isEndOfBatch() {
-        return endOfBatch;
-    }
-
-    @Override
-    public void setEndOfBatch(final boolean endOfBatch) {
-        this.endOfBatch = endOfBatch;
-    }
-
-
     @Override
     public String getLoggerName() {
         return loggerName;
     }
-
 
     @Override
     public Level getLevel() {
@@ -125,6 +91,10 @@ public class RingBufferLogEvent implements LogEvent {
             return message == null ? EMPTY : message;
         }
         return message;
+    }
+
+    public Throwable getThrown() {
+        return thrown;
     }
 
 
@@ -143,6 +113,20 @@ public class RingBufferLogEvent implements LogEvent {
         return threadPriority;
     }
 
+    /**
+     * Returns {@code true} if this event is the end of a batch, {@code false} otherwise.
+     *
+     * @return {@code true} if this event is the end of a batch, {@code false} otherwise
+     */
+    @Override
+    public boolean isEndOfBatch() {
+        return endOfBatch;
+    }
+
+    @Override
+    public void setEndOfBatch(final boolean endOfBatch) {
+        this.endOfBatch = endOfBatch;
+    }
 
     /**
      * Release references held by ring buffer to allow objects to be garbage-collected.
@@ -150,10 +134,18 @@ public class RingBufferLogEvent implements LogEvent {
     public void clear() {
         this.asyncDirectJDKLog = null;
         this.loggerName = null;
-        this.fqcn = null;
         this.level = null;
         this.message = null;
         this.thrown = null;
+    }
+
+    private static class Factory implements EventFactory<RingBufferLogEvent> {
+
+        @Override
+        public RingBufferLogEvent newInstance() {
+            final RingBufferLogEvent result = new RingBufferLogEvent();
+            return result;
+        }
     }
 
 }
