@@ -26,7 +26,7 @@ import com.lmax.disruptor.dsl.ProducerType;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
-import org.apache.juli.util.Log4jThreadFactory;
+import org.apache.juli.util.BESThreadFactory;
 
 /**
  * Helper class for async loggers: AsyncLoggerDisruptor handles the mechanics of working with the LMAX Disruptor, and
@@ -70,7 +70,7 @@ public class AsyncLoggerDisruptor {
         ringBufferSize = DisruptorUtil.calculateRingBufferSize("AsyncDirectJDKLog.RingBufferSize");
         final WaitStrategy waitStrategy = DisruptorUtil.createWaitStrategy("AsyncDirectJDKLog.WaitStrategy");
 
-        final ThreadFactory threadFactory = new Log4jThreadFactory("AsyncLoggerDisruptor", true, Thread.NORM_PRIORITY) {
+        final ThreadFactory threadFactory = new BESThreadFactory("AsyncLoggerDisruptor", true, Thread.NORM_PRIORITY) {
             @Override
             public Thread newThread(final Runnable r) {
                 final Thread result = super.newThread(r);

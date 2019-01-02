@@ -21,11 +21,11 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Creates {@link Log4jThread}s.
+ * Creates {@link BESThread}s.
  * 
  * @since 2.7
  */
-public class Log4jThreadFactory implements ThreadFactory {
+public class BESThreadFactory implements ThreadFactory {
 
     private static final String PREFIX = "TF-";
 
@@ -36,8 +36,8 @@ public class Log4jThreadFactory implements ThreadFactory {
      *            The thread factory name.
      * @return a new daemon thread factory.
      */
-    public static Log4jThreadFactory createDaemonThreadFactory(final String threadFactoryName) {
-        return new Log4jThreadFactory(threadFactoryName, true, Thread.NORM_PRIORITY);
+    public static BESThreadFactory createDaemonThreadFactory(final String threadFactoryName) {
+        return new BESThreadFactory(threadFactoryName, true, Thread.NORM_PRIORITY);
     }
 
     /**
@@ -45,14 +45,13 @@ public class Log4jThreadFactory implements ThreadFactory {
      *
      * This is mainly used for tests. Production code should be very careful with creating
      * non-daemon threads since those will block application shutdown
-     * (see https://issues.apache.org/jira/browse/LOG4J2-1748).
      *
      * @param threadFactoryName
      *            The thread factory name.
      * @return a new daemon thread factory.
      */
-    public static Log4jThreadFactory createThreadFactory(final String threadFactoryName) {
-        return new Log4jThreadFactory(threadFactoryName, false, Thread.NORM_PRIORITY);
+    public static BESThreadFactory createThreadFactory(final String threadFactoryName) {
+        return new BESThreadFactory(threadFactoryName, false, Thread.NORM_PRIORITY);
     }
 
     private static final AtomicInteger FACTORY_NUMBER = new AtomicInteger(1);
@@ -72,7 +71,7 @@ public class Log4jThreadFactory implements ThreadFactory {
      * @param priority
      *            The thread priority.
      */
-    public Log4jThreadFactory(final String threadFactoryName, final boolean daemon, final int priority) {
+    public BESThreadFactory(final String threadFactoryName, final boolean daemon, final int priority) {
         this.threadNamePrefix = PREFIX + FACTORY_NUMBER.getAndIncrement() + "-" + threadFactoryName + "-";
         this.daemon = daemon;
         this.priority = priority;
@@ -83,8 +82,8 @@ public class Log4jThreadFactory implements ThreadFactory {
 
     @Override
     public Thread newThread(final Runnable runnable) {
-        // Log4jThread prefixes names with "Log4j2-".
-        final Thread thread = new Log4jThread(group, runnable, threadNamePrefix + THREAD_NUMBER.getAndIncrement(), 0);
+        // BESThread prefixes names with "BES-".
+        final Thread thread = new BESThread(group, runnable, threadNamePrefix + THREAD_NUMBER.getAndIncrement(), 0);
         if (thread.isDaemon() != daemon) {
             thread.setDaemon(daemon);
         }

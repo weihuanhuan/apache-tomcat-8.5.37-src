@@ -43,15 +43,6 @@ public final class Strings {
         // empty
     }
 
-    /**
-     * Returns a double quoted string.
-     *
-     * @param str a String
-     * @return {@code "str"}
-     */
-    public static String dquote(final String str) {
-        return Chars.DQUOTE + str + Chars.DQUOTE;
-    }
 
     /**
      * Checks if a String is blank. A blank string is one that is {@code null}, empty, or when trimmed using
@@ -125,16 +116,6 @@ public final class Strings {
      */
     public static boolean isNotEmpty(final CharSequence cs) {
         return !isEmpty(cs);
-    }
-
-    /**
-     * Returns a quoted string.
-     *
-     * @param str a String
-     * @return {@code 'str'}
-     */
-    public static String quote(final String str) {
-        return Chars.QUOTE + str + Chars.QUOTE;
     }
 
     /**

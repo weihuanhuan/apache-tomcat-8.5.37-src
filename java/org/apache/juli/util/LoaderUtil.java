@@ -43,7 +43,7 @@ public final class LoaderUtil {
      *
      * @since 2.1
      */
-    public static final String IGNORE_TCCL_PROPERTY = "log4j.ignoreTCL";
+    public static final String IGNORE_TCCL_PROPERTY = "bes.ignoreTCL";
 
     private static final SecurityManager SECURITY_MANAGER = System.getSecurityManager();
 

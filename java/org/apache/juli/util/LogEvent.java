@@ -19,7 +19,7 @@ package org.apache.juli.util;
 
 import java.io.Serializable;
 import java.util.logging.Level;
-import java.util.logging.LogRecord;
+import org.apache.juli.async.AsyncDirectJDKLog;
 
 /**
  * Provides contextual information about a logged message. A LogEvent must be {@link Serializable} so that it
@@ -31,13 +31,6 @@ import java.util.logging.LogRecord;
  */
 public interface LogEvent extends Serializable {
 
-    /**
-     * Gets the logger name.
-     *
-     * @return logger name, may be {@code null}.
-     */
-    String getLoggerName();
-
     Level getLevel();
 
     /**
@@ -45,31 +38,21 @@ public interface LogEvent extends Serializable {
      *
      * @return message.
      */
-    LogRecord getMessage();
+    String getMessage();
 
     /**
      * Gets the thread ID.
      *
      * @return thread ID.
-     * @since 2.6
      */
-    long getThreadId();
 
-    /**
-     * Gets the thread name.
-     *
-     * @return thread name, may be null.
-     * TODO guess this could go into a thread context object too. (RG) Why?
-     */
-    String getThreadName();
+    Throwable getThrown();
 
-    /**
-     * Gets the thread priority.
-     *
-     * @return thread priority.
-     * @since 2.6
-     */
-    int getThreadPriority();
+    int getThreadId();
+
+    String getLoggerName();
+
+    AsyncDirectJDKLog getAsyncDirectJDKLog();
 
     /**
      * Returns {@code true} if this event is the last one in a batch, {@code false} otherwise. Used by asynchronous

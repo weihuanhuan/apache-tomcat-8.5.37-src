@@ -32,7 +32,6 @@ public class RingBufferLogEventHandler implements
     private static final int NOTIFY_PROGRESS_THRESHOLD = 50;
     private Sequence sequenceCallback;
     private int counter;
-    private long threadId = -1;
 
     @Override
     public void setSequenceCallback(final Sequence sequenceCallback) {
@@ -41,7 +40,7 @@ public class RingBufferLogEventHandler implements
 
     @Override
     public void onEvent(final RingBufferLogEvent event, final long sequence,
-            final boolean endOfBatch) throws Exception {
+                        final boolean endOfBatch) throws Exception {
         event.execute(endOfBatch);
         event.clear();
 
@@ -54,18 +53,8 @@ public class RingBufferLogEventHandler implements
         }
     }
 
-    /**
-     * Returns the thread ID of the background consumer thread, or {@code -1} if the background thread has not started
-     * yet.
-     * @return the thread ID of the background consumer thread, or {@code -1}
-     */
-    public long getThreadId() {
-        return threadId;
-    }
-
     @Override
     public void onStart() {
-        threadId = Thread.currentThread().getId();
     }
 
     @Override

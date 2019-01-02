@@ -27,7 +27,7 @@ import java.util.Map.Entry;
 import java.util.logging.Formatter;
 import java.util.logging.LogManager;
 import java.util.logging.LogRecord;
-import org.apache.juli.util.Log4jThread;
+import org.apache.juli.util.BESThread;
 
 /**
  * Provides same information as default log format but on a single line to make
@@ -133,7 +133,8 @@ public class OneLineFormatter extends Formatter {
         // Thread
         sb.append(' ');
         sb.append('[');
-        if (Thread.currentThread() instanceof AsyncFileHandler.LoggerThread || Thread.currentThread() instanceof  Log4jThread) {
+        if (Thread.currentThread() instanceof AsyncFileHandler.LoggerThread ||
+                Thread.currentThread() instanceof BESThread) {
             // If using the async handler can't get the thread name from the
             // current thread.
             sb.append(getThreadName(record.getThreadID()));

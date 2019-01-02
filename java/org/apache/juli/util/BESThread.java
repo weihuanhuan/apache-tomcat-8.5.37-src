@@ -20,11 +20,11 @@ package org.apache.juli.util;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Prefixes thread names with {@code "Log4j2-"}.
+ * Prefixes thread names with {@code "BES-"}.
  */
-public class Log4jThread extends Thread {
+public class BESThread extends Thread {
 
-    static final String PREFIX = "Log4j2-";
+    static final String PREFIX = "BES-";
 
     private static final AtomicLong threadInitNumber = new AtomicLong();
 
@@ -36,35 +36,35 @@ public class Log4jThread extends Thread {
         return PREFIX + name;
     }
 
-    public Log4jThread() {
+    public BESThread() {
         super(toThreadName(nextThreadNum()));
     }
 
-    public Log4jThread(final Runnable target) {
+    public BESThread(final Runnable target) {
         super(target, toThreadName(nextThreadNum()));
     }
 
-    public Log4jThread(final Runnable target, final String name) {
+    public BESThread(final Runnable target, final String name) {
         super(target, toThreadName(name));
     }
 
-    public Log4jThread(final String name) {
+    public BESThread(final String name) {
         super(toThreadName(name));
     }
 
-    public Log4jThread(final ThreadGroup group, final Runnable target) {
+    public BESThread(final ThreadGroup group, final Runnable target) {
         super(group, target, toThreadName(nextThreadNum()));
     }
 
-    public Log4jThread(final ThreadGroup group, final Runnable target, final String name) {
+    public BESThread(final ThreadGroup group, final Runnable target, final String name) {
         super(group, target, toThreadName(name));
     }
 
-    public Log4jThread(final ThreadGroup group, final Runnable target, final String name, final long stackSize) {
+    public BESThread(final ThreadGroup group, final Runnable target, final String name, final long stackSize) {
         super(group, target, toThreadName(name), stackSize);
     }
 
-    public Log4jThread(final ThreadGroup group, final String name) {
+    public BESThread(final ThreadGroup group, final String name) {
         super(group, toThreadName(name));
     }
 

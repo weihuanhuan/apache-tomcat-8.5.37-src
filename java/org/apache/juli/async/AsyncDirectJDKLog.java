@@ -21,16 +21,11 @@ import com.lmax.disruptor.dsl.Disruptor;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import org.apache.juli.logging.DirectJDKLog;
-import org.apache.juli.logging.Log;
 
 public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVararg<RingBufferLogEvent> {
 
-    private static final ThreadNameCachingStrategy THREAD_NAME_CACHING_STRATEGY = ThreadNameCachingStrategy.create();
     private static final AsyncLoggerDisruptor loggerDisruptor = new AsyncLoggerDisruptor();
-
     private final ThreadLocal<RingBufferLogEventTranslator> threadLocalTranslator = new ThreadLocal<>();
-
-    private static final String FQCN = "Fully Quality Class Name";
 
     public AsyncDirectJDKLog(final String name) {
         super(name);
@@ -48,12 +43,11 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
     public void logMessage(final Level level, final String message,
                            final Throwable thrown) {
 
-        LogRecord lr = new LogRecord(level, message);
         if (loggerDisruptor.isUseThreadLocals()) {
-            logWithThreadLocalTranslator(level, lr, thrown);
+            logWithThreadLocalTranslator(level, message, thrown);
         } else {
             // LOG4J2-1172: avoid storing non-JDK classes in ThreadLocals to avoid memory leaks in web apps
-            logWithVarargTranslator(level, lr, thrown);
+            logWithVarargTranslator(level, message, thrown);
         }
     }
 
@@ -68,12 +62,12 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
      * @param thrown  a {@code Throwable} or {@code null}
      */
     private void logWithThreadLocalTranslator(final Level level,
-                                              final LogRecord message, final Throwable thrown) {
+                                              final String message, final Throwable thrown) {
         // Implementation note: this method is tuned for performance. MODIFY WITH CARE!
 
         final RingBufferLogEventTranslator translator = getCachedTranslator();
-        initTranslator(translator, level, message, thrown);
-        initTranslatorThreadValues(translator);
+        translator.updateThreadValues();
+        translator.setBasicValues(this, logger.getName(), level, message, thrown);
         publish(translator);
     }
 
@@ -100,20 +94,6 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
         }
     }
 
-    private void initTranslator(final RingBufferLogEventTranslator translator,
-                                final Level level, final LogRecord message, final Throwable thrown) {
-
-        translator.setBasicValues(this, this.getClass().getSimpleName(), level, message, thrown);
-    }
-
-    private void initTranslatorThreadValues(final RingBufferLogEventTranslator translator) {
-        // constant check should be optimized out when using default (CACHED)
-        if (THREAD_NAME_CACHING_STRATEGY == ThreadNameCachingStrategy.UNCACHED) {
-            translator.updateThreadValues();
-        }
-    }
-
-
     /**
      * Enqueues the specified log event data for logging in a background thread.
      * <p>
@@ -125,7 +105,7 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
      * @param thrown  a {@code Throwable} or {@code null}
      */
     private void logWithVarargTranslator(final Level level,
-                                         final LogRecord message, final Throwable thrown) {
+                                         final String message, final Throwable thrown) {
         // Implementation note: candidate for optimization: exceeds 35 bytecodes.
 
         final Disruptor<RingBufferLogEvent> disruptor = loggerDisruptor.getDisruptor();
@@ -149,14 +129,13 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
         // Implementation note: candidate for optimization: exceeds 35 bytecodes.
         final AsyncDirectJDKLog asyncDirectJDKLog = (AsyncDirectJDKLog) args[0];
         final Level level = (Level) args[1];
-        final LogRecord message = (LogRecord) args[2];
+        final String message = (String) args[2];
         final Throwable thrown = (Throwable) args[3];
 
 
         final Thread currentThread = Thread.currentThread();
-        final String threadName = THREAD_NAME_CACHING_STRATEGY.getThreadName();
-        event.setValues(asyncDirectJDKLog, this.getClass().getSimpleName(), level, message, thrown,
-                currentThread.getId(), threadName, currentThread.getPriority());
+        event.setValues(asyncDirectJDKLog, this.logger.getName(), level, message, thrown,
+                (int) currentThread.getId());
     }
 
     /**
@@ -168,13 +147,15 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
      * @param thrown  optional exception
      */
     void logMessageInCurrentThread(final Level level,
-                                   final LogRecord message, final Throwable thrown) {
-        // bypass RingBuffer and invoke Appender directly
-        logger.log(message);
+                                   final String message, final Throwable thrown) {
+//        logger.log(message);
+        LogRecord logRecord = new LogRecord(level, message);
+        logRecord.setThrown(thrown);
+        logger.log(logRecord);
     }
 
     private void handleRingBufferFull(final Level level,
-                                      final LogRecord msg,
+                                      final String msg,
                                       final Throwable thrown) {
         final EventRoute eventRoute = loggerDisruptor.getEventRoute(level);
         switch (eventRoute) {
@@ -200,122 +181,96 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
      * @param event the event to log
      */
     public void actualAsyncLog(final RingBufferLogEvent event) {
-        //JF logRecord message
-//        logger.log();
-        //JF message class method
-//        logger.logp();
-        //JF message class method resource
-//        logger.logrb();
-        logger.log(event.getLevel(), event.getMessage().getMessage(), event.getThrown());
+        LogRecord logRecord = new LogRecord(event.getLevel(), event.getMessage());
+        logRecord.setThrown(event.getThrown());
+        logRecord.setThreadID(event.getThreadId());
+        logRecord.setLoggerName(event.getLoggerName());
+        logger.log(logRecord);
     }
+
 
     @Override
     public final void debug(Object message) {
-        logMessage(Level.FINE, String.valueOf(message), null);
+        if (isDebugEnabled()) {
+            logMessage(Level.FINE, String.valueOf(message), null);
+        }
     }
 
     @Override
     public final void debug(Object message, Throwable t) {
-        logMessage(Level.FINE, String.valueOf(message), t);
+        if (isDebugEnabled()) {
+            logMessage(Level.FINE, String.valueOf(message), t);
+        }
     }
 
     @Override
     public final void trace(Object message) {
-        logMessage(Level.FINER, String.valueOf(message), null);
+        if (isTraceEnabled()) {
+            logMessage(Level.FINER, String.valueOf(message), null);
+        }
     }
 
     @Override
     public final void trace(Object message, Throwable t) {
-        logMessage(Level.FINER, String.valueOf(message), t);
+        if (isTraceEnabled()) {
+            logMessage(Level.FINER, String.valueOf(message), t);
+        }
     }
 
     @Override
     public final void info(Object message) {
-        logMessage(Level.INFO, String.valueOf(message), null);
+        if (isInfoEnabled()) {
+            logMessage(Level.INFO, String.valueOf(message), null);
+        }
     }
 
     @Override
     public final void info(Object message, Throwable t) {
-        logMessage(Level.INFO, String.valueOf(message), t);
+        if (isInfoEnabled()) {
+            logMessage(Level.INFO, String.valueOf(message), t);
+        }
     }
 
     @Override
     public final void warn(Object message) {
-        logMessage(Level.WARNING, String.valueOf(message), null);
+        if (isWarnEnabled()) {
+            logMessage(Level.WARNING, String.valueOf(message), null);
+        }
     }
 
     @Override
     public final void warn(Object message, Throwable t) {
-        logMessage(Level.WARNING, String.valueOf(message), t);
+        if (isWarnEnabled()) {
+            logMessage(Level.WARNING, String.valueOf(message), t);
+        }
     }
 
     @Override
     public final void error(Object message) {
-        logMessage(Level.SEVERE, String.valueOf(message), null);
+        if (isErrorEnabled()) {
+            logMessage(Level.SEVERE, String.valueOf(message), null);
+        }
     }
 
     @Override
     public final void error(Object message, Throwable t) {
-        logMessage(Level.SEVERE, String.valueOf(message), t);
+        if (isErrorEnabled()) {
+            logMessage(Level.SEVERE, String.valueOf(message), t);
+        }
     }
 
     @Override
     public final void fatal(Object message) {
-        logMessage(Level.SEVERE, String.valueOf(message), null);
+        if (isFatalEnabled()) {
+            logMessage(Level.SEVERE, String.valueOf(message), null);
+        }
     }
 
     @Override
     public final void fatal(Object message, Throwable t) {
-        logMessage(Level.SEVERE, String.valueOf(message), t);
-    }
-
-
-    public final void debug(String message) {
-        logMessage(Level.FINE, message, null);
-    }
-
-    public final void debug(String message, Throwable t) {
-        logMessage(Level.FINE, message, t);
-    }
-
-    public final void trace(String message) {
-        logMessage(Level.FINER, message, null);
-    }
-
-    public final void trace(String message, Throwable t) {
-        logMessage(Level.FINER, message, t);
-    }
-
-    public final void info(String message) {
-        logMessage(Level.INFO, message, null);
-    }
-
-    public final void info(String message, Throwable t) {
-        logMessage(Level.INFO, message, t);
-    }
-
-    public final void warn(String message) {
-        logMessage(Level.WARNING, message, null);
-    }
-
-    public final void warn(String message, Throwable t) {
-        logMessage(Level.WARNING, message, t);
-    }
-
-    public final void error(String message) {
-        logMessage(Level.SEVERE, message, null);
-    }
-
-    public final void error(String message, Throwable t) {
-        logMessage(Level.SEVERE, message, t);
-    }
-
-    public final void fatal(String message) {
-        logMessage(Level.SEVERE, message, null);
-    }
-
-    public final void fatal(String message, Throwable t) {
-        logMessage(Level.SEVERE, message, t);
+        if (isFatalEnabled()) {
+            logMessage(Level.SEVERE, String.valueOf(message), t);
+        }
     }
 
 }

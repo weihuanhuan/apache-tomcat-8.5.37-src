@@ -25,11 +25,7 @@ import com.lmax.disruptor.TimeoutBlockingWaitStrategy;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.YieldingWaitStrategy;
 import java.util.Locale;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import org.apache.juli.util.Constants;
 import org.apache.juli.util.Integers;
 import org.apache.juli.util.LoaderUtil;
 
@@ -39,7 +35,6 @@ import org.apache.juli.util.LoaderUtil;
 final class DisruptorUtil {
     private static final int RINGBUFFER_MIN_SIZE = 128;
     private static final int RINGBUFFER_DEFAULT_SIZE = 256 * 1024;
-    private static final int RINGBUFFER_NO_GC_DEFAULT_SIZE = 4 * 1024;
 
     private DisruptorUtil() {
     }
@@ -74,7 +69,7 @@ final class DisruptorUtil {
     }
 
     static int calculateRingBufferSize(final String propertyName) {
-        int ringBufferSize = Constants.ENABLE_THREADLOCALS ? RINGBUFFER_NO_GC_DEFAULT_SIZE : RINGBUFFER_DEFAULT_SIZE;
+        int ringBufferSize = RINGBUFFER_DEFAULT_SIZE;
         final String userPreferredRBSize = System.getProperty(propertyName,
                 String.valueOf(ringBufferSize));
         try {
@@ -103,27 +98,4 @@ final class DisruptorUtil {
         }
     }
 
-
-    /**
-     * Returns the thread ID of the background appender thread. This allows us to detect Logger.log() calls initiated
-     * from the appender thread, which may cause deadlock when the RingBuffer is full. (LOG4J2-471)
-     *
-     * @param executor runs the appender thread
-     * @return the thread ID of the background appender thread
-     */
-    public static long getExecutorThreadId(final ExecutorService executor) {
-        final Future<Long> result = executor.submit(new Callable<Long>() {
-            @Override
-            public Long call() {
-                return Thread.currentThread().getId();
-            }
-        });
-        try {
-            return result.get();
-        } catch (final Exception ex) {
-            final String msg = "Could not obtain executor thread Id. "
-                    + "Giving up to avoid the risk of application deadlock.";
-            throw new IllegalStateException(msg, ex);
-        }
-    }
 }

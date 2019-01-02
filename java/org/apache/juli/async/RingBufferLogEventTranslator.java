@@ -18,7 +18,6 @@ package org.apache.juli.async;
 
 import com.lmax.disruptor.EventTranslator;
 import java.util.logging.Level;
-import java.util.logging.LogRecord;
 
 /**
  * This class is responsible for writing elements that make up a log event into
@@ -30,22 +29,18 @@ public class RingBufferLogEventTranslator implements
         EventTranslator<RingBufferLogEvent> {
 
     private AsyncDirectJDKLog asyncDirectJDKLog;
+    public Level level;
+    public String message;
+    public Throwable thrown;
     private String loggerName;
 
-    public Level level;
-    public LogRecord message;
-    public Throwable thrown;
-
-    private long threadId = Thread.currentThread().getId();
-    private String threadName = Thread.currentThread().getName();
-    private int threadPriority = Thread.currentThread().getPriority();
+    private int threadId = (int) Thread.currentThread().getId();
 
     @Override
     public void translateTo(final RingBufferLogEvent event, final long sequence) {
 
-        event.setValues(asyncDirectJDKLog, loggerName, level, message, thrown,
-                threadId, threadName, threadPriority);
-
+        event.setValues(asyncDirectJDKLog, loggerName,
+                level, message, thrown, threadId);
         clear(); // clear the translator
     }
 
@@ -57,7 +52,7 @@ public class RingBufferLogEventTranslator implements
     }
 
     public void setBasicValues(final AsyncDirectJDKLog asyncDirectJDKLog, final String loggerName,
-                               final Level level, final LogRecord msg, final Throwable throwable) {
+                               final Level level, final String msg, final Throwable throwable) {
         this.asyncDirectJDKLog = asyncDirectJDKLog;
         this.loggerName = loggerName;
         this.level = level;
@@ -66,9 +61,6 @@ public class RingBufferLogEventTranslator implements
     }
 
     public void updateThreadValues() {
-        final Thread currentThread = Thread.currentThread();
-        this.threadId = currentThread.getId();
-        this.threadName = currentThread.getName();
-        this.threadPriority = currentThread.getPriority();
+        this.threadId = (int) Thread.currentThread().getId();
     }
 }
