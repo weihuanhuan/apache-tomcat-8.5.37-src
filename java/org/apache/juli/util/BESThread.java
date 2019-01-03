@@ -17,8 +17,6 @@
 
 package org.apache.juli.util;
 
-import java.util.concurrent.atomic.AtomicLong;
-
 /**
  * Prefixes thread names with {@code "BES-"}.
  */
@@ -26,46 +24,14 @@ public class BESThread extends Thread {
 
     static final String PREFIX = "BES-";
 
-    private static final AtomicLong threadInitNumber = new AtomicLong();
-
-    private static long nextThreadNum() {
-        return threadInitNumber.getAndIncrement();
-    }
 
     private static String toThreadName(final Object name) {
         return PREFIX + name;
-    }
-
-    public BESThread() {
-        super(toThreadName(nextThreadNum()));
-    }
-
-    public BESThread(final Runnable target) {
-        super(target, toThreadName(nextThreadNum()));
-    }
-
-    public BESThread(final Runnable target, final String name) {
-        super(target, toThreadName(name));
-    }
-
-    public BESThread(final String name) {
-        super(toThreadName(name));
-    }
-
-    public BESThread(final ThreadGroup group, final Runnable target) {
-        super(group, target, toThreadName(nextThreadNum()));
-    }
-
-    public BESThread(final ThreadGroup group, final Runnable target, final String name) {
-        super(group, target, toThreadName(name));
     }
 
     public BESThread(final ThreadGroup group, final Runnable target, final String name, final long stackSize) {
         super(group, target, toThreadName(name), stackSize);
     }
 
-    public BESThread(final ThreadGroup group, final String name) {
-        super(group, toThreadName(name));
-    }
 
 }

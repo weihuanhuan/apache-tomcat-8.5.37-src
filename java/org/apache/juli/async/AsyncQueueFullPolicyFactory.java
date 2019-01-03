@@ -61,7 +61,7 @@ public class AsyncQueueFullPolicyFactory {
      * @return a new AsyncQueueFullPolicy
      */
     public static AsyncQueueFullPolicy create() {
-        final String router =System.getProperty(PROPERTY_NAME_ASYNC_EVENT_ROUTER);
+        final String router = System.getProperty(PROPERTY_NAME_ASYNC_EVENT_ROUTER);
         if (router == null || PROPERTY_VALUE_DEFAULT_ASYNC_EVENT_ROUTER.equals(router)
                 || DefaultAsyncQueueFullPolicy.class.getSimpleName().equals(router)
                 || DefaultAsyncQueueFullPolicy.class.getName().equals(router)) {
@@ -76,12 +76,7 @@ public class AsyncQueueFullPolicyFactory {
     }
 
     private static AsyncQueueFullPolicy createCustomRouter(final String router) {
-        try {
-            final Class<? extends AsyncQueueFullPolicy> cls = LoaderUtil.loadClass(router).asSubclass(AsyncQueueFullPolicy.class);
-            return cls.newInstance();
-        } catch (final Exception ex) {
-            return new DefaultAsyncQueueFullPolicy();
-        }
+        return new DefaultAsyncQueueFullPolicy();
     }
 
     private static AsyncQueueFullPolicy createDiscardingAsyncQueueFullPolicy() {

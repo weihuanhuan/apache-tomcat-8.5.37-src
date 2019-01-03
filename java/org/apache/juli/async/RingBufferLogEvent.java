@@ -91,27 +91,6 @@ public class RingBufferLogEvent implements LogEvent {
         return loggerName;
     }
 
-    @Override
-    public AsyncDirectJDKLog getAsyncDirectJDKLog() {
-        return asyncDirectJDKLog;
-    }
-
-
-    /**
-     * Returns {@code true} if this event is the end of a batch, {@code false} otherwise.
-     *
-     * @return {@code true} if this event is the end of a batch, {@code false} otherwise
-     */
-    @Override
-    public boolean isEndOfBatch() {
-        return endOfBatch;
-    }
-
-    @Override
-    public void setEndOfBatch(final boolean endOfBatch) {
-        this.endOfBatch = endOfBatch;
-    }
-
     /**
      * Release references held by ring buffer to allow objects to be garbage-collected.
      */

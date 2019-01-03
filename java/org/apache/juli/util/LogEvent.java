@@ -19,7 +19,6 @@ package org.apache.juli.util;
 
 import java.io.Serializable;
 import java.util.logging.Level;
-import org.apache.juli.async.AsyncDirectJDKLog;
 
 /**
  * Provides contextual information about a logged message. A LogEvent must be {@link Serializable} so that it
@@ -31,45 +30,40 @@ import org.apache.juli.async.AsyncDirectJDKLog;
  */
 public interface LogEvent extends Serializable {
 
+    /**
+     * Gets the Level.
+     *
+     * @return Level.
+     */
     Level getLevel();
 
     /**
-     * Gets the message associated with the event.
+     * Gets the message.
      *
      * @return message.
      */
     String getMessage();
 
     /**
-     * Gets the thread ID.
+     * Gets the Thrown
      *
-     * @return thread ID.
+     * @return Thrown.
      */
 
     Throwable getThrown();
 
+    /**
+     * Gets the thread ID.
+     *
+     * @return thread ID.
+     */
     int getThreadId();
 
+    /**
+     * Gets the Logger Name
+     *
+     * @return Logger Name.
+     */
     String getLoggerName();
-
-    AsyncDirectJDKLog getAsyncDirectJDKLog();
-
-    /**
-     * Returns {@code true} if this event is the last one in a batch, {@code false} otherwise. Used by asynchronous
-     * Loggers and Appenders to signal to buffered downstream components when to flush to disk, as a more efficient
-     * alternative to the {@code immediateFlush=true} configuration.
-     *
-     * @return whether this event is the last one in a batch.
-     */
-    boolean isEndOfBatch();
-
-    /**
-     * Sets whether this event is the last one in a batch. Used by asynchronous Loggers and Appenders to signal to
-     * buffered downstream components when to flush to disk, as a more efficient alternative to the
-     * {@code immediateFlush=true} configuration.
-     *
-     * @param endOfBatch {@code true} if this event is the last one in a batch, {@code false} otherwise.
-     */
-    void setEndOfBatch(boolean endOfBatch);
 
 }

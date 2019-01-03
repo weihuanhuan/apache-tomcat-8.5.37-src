@@ -132,10 +132,8 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
         final String message = (String) args[2];
         final Throwable thrown = (Throwable) args[3];
 
-
-        final Thread currentThread = Thread.currentThread();
         event.setValues(asyncDirectJDKLog, this.logger.getName(), level, message, thrown,
-                (int) currentThread.getId());
+                (int) Thread.currentThread().getId());
     }
 
     /**
@@ -148,9 +146,10 @@ public class AsyncDirectJDKLog extends DirectJDKLog implements EventTranslatorVa
      */
     void logMessageInCurrentThread(final Level level,
                                    final String message, final Throwable thrown) {
-//        logger.log(message);
         LogRecord logRecord = new LogRecord(level, message);
         logRecord.setThrown(thrown);
+        logRecord.setThreadID((int) Thread.currentThread().getId());
+        logRecord.setLoggerName(logger.getName());
         logger.log(logRecord);
     }
 
