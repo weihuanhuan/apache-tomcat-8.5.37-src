@@ -30,6 +30,10 @@ public class DirectJDKLog implements Log {
     // no reason to hide this - but good reasons to not hide
     public final Logger logger;
 
+    public Logger getLogger() {
+        return logger;
+    }
+
     /** Alternate config reader and console format
      */
     private static final String SIMPLE_FMT="java.util.logging.SimpleFormatter";
