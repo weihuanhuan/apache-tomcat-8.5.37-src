@@ -1,6 +1,7 @@
 package org.apache.juli.test;
 
 import java.util.ResourceBundle;
+import java.util.logging.Formatter;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
@@ -98,6 +99,9 @@ public class JDKLoggerTest {
 //        at java.util.logging.Logger.setupResourceInfo(Logger.java:1946)
 //        at java.util.logging.Logger.<init>(Logger.java:380)
 
+
+        //  Formatter.formatMessage() 中先处理 resource bundle ，后替换 {n} ，使用 Parameter,
+        //  注意：替换 {n} 时不会处理 resource bundle了。
         jdkLoggerResource.info("LogStringsTest {0} {p}");
 //        INFO: LogStringsTest {0} {p}
 
@@ -106,6 +110,13 @@ public class JDKLoggerTest {
 
         jdkLoggerResource.log(Level.INFO, "LogStringsTest {0}", "Substitute Parameter");
 //        INFO: LogStringsTest Substitute Parameter
+
+        jdkLoggerResource.log(Level.INFO, "LogStringsTestWithSubstitute", "Substitute Parameter");
+//        INFO: Substitute message Substitute Parameter
+
+        jdkLoggerResource.log(Level.INFO, "{0}", "LogStringsTest");
+//        INFO: LogStringsTest
+
     }
 }
 
