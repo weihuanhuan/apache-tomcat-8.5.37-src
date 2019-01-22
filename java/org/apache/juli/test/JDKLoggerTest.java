@@ -1,5 +1,6 @@
 package org.apache.juli.test;
 
+import java.util.ResourceBundle;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
@@ -82,7 +83,29 @@ public class JDKLoggerTest {
         customLogger.logp(Level.INFO, "sourceClass", "sourceMethod", "info message");
         customLogger.entering("sourceClass", "sourceMethod", "info message");
 
+        //JF resourceBundleName 的查找方式和类的查找方式是一致的，即在包结构中查找文件名，
+        // 这里后缀 .properties 会由JDK在查找的时候添加上去，调用的方法是java.util.ResourceBundle.Control.newBundle()，其中包括如下俩个子调用
+        // ResourceBundle.Control.toBundleName()    ---> baseName + "_" + language + "_" + script + "_" + country + "_" + variant
+        // ResourceBundle.Control.toResourceName0() ---> sb.append(bundleName.replace('.', '/')).append('.').append(suffix);
+        // 同时加上去的还有国际化信息，，所以无需包含在名字中，
+        String resourceBundleName = "org.apache.juli.test.LogStrings";
+        Logger jdkLoggerResource = Logger.getLogger("jdkLoggerResource", resourceBundleName);
 
+        // String resourceBundleName = "org.apache.juli.test.LogStrings.properties";
+        // 注意，自己也不能包含在名字中，否则JDK处理后，依然按照上述方式去变换名字。
+        // 有如下异常,这相当于在包 org.apache.juli.test.LogStrings.properties 下面寻找了
+//        Exception in thread "main" java.util.MissingResourceException: Can't find org.apache.juli.test.LogStrings.properties  bundle
+//        at java.util.logging.Logger.setupResourceInfo(Logger.java:1946)
+//        at java.util.logging.Logger.<init>(Logger.java:380)
+
+        jdkLoggerResource.info("LogStringsTest {0} {p}");
+//        INFO: LogStringsTest {0} {p}
+
+        jdkLoggerResource.info("LogStringsTest");
+//        INFO: Substitute message
+
+        jdkLoggerResource.log(Level.INFO, "LogStringsTest {0}", "Substitute Parameter");
+//        INFO: LogStringsTest Substitute Parameter
     }
 }
 
