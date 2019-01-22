@@ -101,7 +101,7 @@ public class JDKLoggerTest {
 
 
         //  Formatter.formatMessage() 中先处理 resource bundle ，后替换 {n} ，使用 Parameter,
-        //  注意：替换 {n} 时不会处理 resource bundle了。
+        //  注意：替换 {n} 时不会处理 resource bundle了,所以 resource bundle 中的 {n} 会解析，但是 {n} 只会按照 Parameter 替换
         jdkLoggerResource.info("LogStringsTest {0} {p}");
 //        INFO: LogStringsTest {0} {p}
 
