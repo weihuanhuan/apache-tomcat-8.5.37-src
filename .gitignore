@@ -51,3 +51,6 @@ webapps/docs/jdbc-pool.xml
 !java/org/apache/catalina/startup/catalina.properties
 !webapps/docs/jdbc-pool.xml
 out/
+
+#modules/jdbc-pool/target/
+target/
