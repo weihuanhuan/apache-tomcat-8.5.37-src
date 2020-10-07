@@ -35,6 +35,12 @@ public class TokenFactory {
     private String keyPassword;
     private String privateKey;
 
+    private String realm;
+    private long expiration;
+
+    private byte[] sharedSecretKey;
+    private byte[][] privateRawKey;
+
     /**
      * LTPA Versions
      */
@@ -105,13 +111,26 @@ public class TokenFactory {
         this.keyPassword = prop.getProperty("com.ibm.websphere.ltpa.KeyPassword");
         this.privateKey = prop.getProperty("com.ibm.websphere.ltpa.PrivateKey");
         this.sharedKey = prop.getProperty("com.ibm.websphere.ltpa.3DESKey");
+        this.realm = prop.getProperty("com.ibm.websphere.ltpa.Realm");
     }
 
     public void setKeyPassword(String keyPassword) {
         this.keyPassword = keyPassword;
     }
 
-    public boolean isValid() throws Exception {
+    public void setRealm(String realm) {
+        this.realm = realm;
+    }
+
+    public String getRealm() {
+        return realm;
+    }
+
+    public void setExpiration(long expiration) {
+        this.expiration = expiration;
+    }
+
+    public boolean isValidKeys() throws Exception {
         if (keyPassword == null || keyPassword.isEmpty()) {
             throw new Exception("Invalid key password");
         }
@@ -122,6 +141,14 @@ public class TokenFactory {
             throw new Exception("Invalid private key");
         }
 
+        // lets start by recovering the private key, which is encrypted
+        sharedSecretKey = getSecretKey(this.sharedKey, this.keyPassword);
+        byte[] privateSecretKey = getSecretKey(this.privateKey, this.keyPassword);
+        LTPAPrivateKey ltpaPrivateKey = new LTPAPrivateKey(privateSecretKey);
+        privateRawKey = ltpaPrivateKey.getRawKey();
+        setRSAKey(privateRawKey);
+
+        // lets encode and decode a token to check keys
         UserMetadata userMetadata = new UserMetadata();
         userMetadata.setUser("bes-dummy-user");
         userMetadata.setLtpaVersion(LTPA_VERSION.LTPA2);
@@ -132,6 +159,16 @@ public class TokenFactory {
             return true;
         }
         throw new Exception("Invalid ltpa keys");
+    }
+
+    public UserMetadata createUserMetadata(LTPA_VERSION ltpaVersion, String user) {
+        long expirationInMilliseconds = System.currentTimeMillis() + expiration * 1000;
+
+        UserMetadata userMetadata = new UserMetadata();
+        userMetadata.setUser(user);
+        userMetadata.setExpire(expirationInMilliseconds);
+        userMetadata.setLtpaVersion(ltpaVersion);
+        return userMetadata;
     }
 
     /**
@@ -351,7 +388,7 @@ public class TokenFactory {
      */
     public UserMetadata decodeLtpaToken(String tokenLTPA, LTPA_VERSION version) throws Exception {
         // lets get the shared key
-        byte[] sharedKey = getSecretKey(this.sharedKey, this.keyPassword);
+        byte[] sharedKey = sharedSecretKey;
         // and decode from base64 to bytes the given token
         byte[] encryptedBytes = decoder.decode(tokenLTPA);
         // to get the plain decrypted token after applying the decrypting algorithm
@@ -374,10 +411,7 @@ public class TokenFactory {
      * @throws Exception
      */
     public String encodeLTPAToken(UserMetadata userMetadata, LTPA_VERSION version) throws Exception {
-        // lets start by recovering the private key, which is encrypted
-        LTPAPrivateKey ltpaPrivKey = new LTPAPrivateKey(getSecretKey(this.privateKey, this.keyPassword));
-        byte[][] rawKey = ltpaPrivKey.getRawKey();
-        setRSAKey(rawKey);
+        byte[][] rawKey = privateRawKey;
 
         // new lets prepare to prepare the signature
         MessageDigest md1JCE = MessageDigest.getInstance("SHA");
@@ -418,7 +452,7 @@ public class TokenFactory {
         // finally lets crypt everything with the private key and then
         // to apply a base64 encoding
         byte[] tokenBytes = token.toString().getBytes("UTF8");
-        byte[] encryptedBytes = crypt(tokenBytes, getSecretKey(sharedKey, keyPassword), version.equals(LTPA_VERSION.LTPA2) ?
+        byte[] encryptedBytes = crypt(tokenBytes, sharedSecretKey, version.equals(LTPA_VERSION.LTPA2) ?
                 CRIPTING_ALGORITHM.AES_DECRIPTING_ALGORITHM : CRIPTING_ALGORITHM.DES_DECRIPTING_ALGORITHM, Cipher.ENCRYPT_MODE);
         return encoder.encodeAsString(encryptedBytes).replaceAll("[\r\n]", "");
     }

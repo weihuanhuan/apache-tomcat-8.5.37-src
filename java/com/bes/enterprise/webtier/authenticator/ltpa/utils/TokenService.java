@@ -2,6 +2,7 @@ package com.bes.enterprise.webtier.authenticator.ltpa.utils;
 
 import org.apache.catalina.connector.Request;
 import org.apache.catalina.realm.GenericPrincipal;
+import org.apache.catalina.realm.LdapPrincipal;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 
@@ -20,8 +21,7 @@ public class TokenService {
     private String uidPrefix;
     private String cookieDomain;
 
-    private String cookieUser;
-    private long cookieExpire;
+    private String cookieRealm;
 
     public String getCheckUserUid(Request request) {
         return getUserUid(request, false);
@@ -38,10 +38,9 @@ public class TokenService {
         }
 
         if (update) {
-            cookieUser = userMetaData.getUser();
-            cookieExpire = userMetaData.getExpire();
+            cookieRealm = extraCookieRealm(userMetaData.getUser());
         }
-        return getUserUidValue(userMetaData.getUser(), uidPrefix);
+        return getUserUidValue(userMetaData.getUser());
     }
 
     private UserMetadata getUserMetaData(Request request) {
@@ -54,8 +53,8 @@ public class TokenService {
         }
 
         try {
-            TokenFactory.LTPA_VERSION ltpaVersion = TokenFactory.LTPA_VERSION.getVersionByName(cookie.getName());
-            UserMetadata userMetadata = tokenFactory.decodeLtpaToken(cookie.getValue(), ltpaVersion);
+            TokenFactory.LTPA_VERSION version = TokenFactory.LTPA_VERSION.getVersionByName(cookie.getName());
+            UserMetadata userMetadata = tokenFactory.decodeLtpaToken(cookie.getValue(), version);
             return userMetadata;
         } catch (Exception e) {
             log.warn(String.format("LtpaToken decode failed with cookie:%s=%s !", cookie.getName(), cookie.getValue()), e);
@@ -85,60 +84,85 @@ public class TokenService {
         return null;
     }
 
-    private String getUserUidValue(String user, String uidPrefix) {
+    private String extraCookieRealm(String user) {
+        int start = user.indexOf(":") + 1;
+        if (start <= 0) {
+            return null;
+        }
+
+        int end = user.indexOf("/" + uidPrefix);
+        if (end < 0) {
+            return null;
+        }
+
+        if (start >= end) {
+            return null;
+        }
+
+        String cookieRealm = user.substring(start, end);
+        if (log.isDebugEnabled()) {
+            log.debug(String.format("Extra cookie realm:%s from ltpa user:%s.", cookieRealm, user));
+        }
+        return cookieRealm;
+    }
+
+    private String getUserUidValue(String user) {
         String userUidValue = null;
         int indexOf = user.indexOf(uidPrefix + "=");
         if (indexOf != -1) {
             userUidValue = user.substring(indexOf + (uidPrefix + "=").length(), user.indexOf(",", indexOf));
         }
         if (userUidValue == null) {
-            log.warn(String.format("Cannot not found user uid value from LtpaToken user:%s with prefix:%s", user, uidPrefix));
+            log.warn(String.format("Cannot not found user uid value from ltpa user:%s with prefix:%s", user, uidPrefix));
         }
         return userUidValue;
     }
 
     public void createLtpaCookie(Request request) {
-        if (cookieUser == null) {
+        String userDn = getUserDn(request.getPrincipal());
+        if (userDn == null || !userDn.startsWith(uidPrefix)) {
             if (log.isDebugEnabled()) {
-                log.debug("We cannot to create ltpa token due to cookieUser non-exist!");
+                log.debug(String.format("We cannot to create ltpa token due to userDn:%s and uidPrefix:%s mismatch!", userDn, uidPrefix));
             }
             return;
         }
 
-        String userUid = getUserUidValue(cookieUser, uidPrefix);
-        if (userUid == null || !userUid.equals(getUsername(request.getPrincipal()))) {
-            if (log.isDebugEnabled()) {
-                log.debug("We cannot to create ltpa token due to cookieUser and username mismatch!");
-            }
-            return;
-        }
-
-        createLtpaCookie(request, cookieUser, cookieExpire, TokenFactory.LTPA_VERSION.LTPA2);
+        String user = generateLtpaUser(userDn);
+        createLtpaCookie(request, user, TokenFactory.LTPA_VERSION.LTPA2);
         if (!interoperability) {
             return;
         }
 
-        createLtpaCookie(request, cookieUser, cookieExpire, TokenFactory.LTPA_VERSION.LTPA);
+        createLtpaCookie(request, user, TokenFactory.LTPA_VERSION.LTPA);
     }
 
-    private void createLtpaCookie(Request request, String cookieUser, long cookieExpire, TokenFactory.LTPA_VERSION ltpaVersion) {
+    private String generateLtpaUser(String userDn) {
+        String realm;
+        if (cookieRealm != null && !cookieRealm.isEmpty()) {
+            realm = cookieRealm;
+        } else {
+            realm = tokenFactory.getRealm();
+        }
+
+        //user\:FederatedRealm/uid=tomcat,ou=people,dc=ltpa,dc=com
+        StringBuffer stringBuffer = new StringBuffer();
+        stringBuffer.append("user");
+        stringBuffer.append("\\:");
+        stringBuffer.append(realm);
+        stringBuffer.append("/");
+        stringBuffer.append(userDn);
+        return stringBuffer.toString();
+    }
+
+    private void createLtpaCookie(Request request, String user, TokenFactory.LTPA_VERSION version) {
         try {
-            UserMetadata userMetadata = createUserMetadata(ltpaVersion, cookieUser, cookieExpire);
+            UserMetadata userMetadata = tokenFactory.createUserMetadata(version, user);
             String cookieValue = tokenFactory.encodeLTPAToken(userMetadata);
-            addLtpaToken(request, ltpaVersion.getCookieName(), cookieValue, (int) userMetadata.getExpire());
+            addLtpaToken(request, version.getCookieName(), cookieValue, -1);
         } catch (Exception e) {
-            log.warn(String.format("Failed to encode LtpaToken for user:%s with version:%s ", cookieUser, ltpaVersion), e);
+            log.warn(String.format("Failed to encode LtpaToken for user:%s with version:%s ", user, version), e);
             return;
         }
-    }
-
-    private UserMetadata createUserMetadata(TokenFactory.LTPA_VERSION ltpaVersion, String user, long expire) {
-        //user\:FederatedRealm/uid=tomcat,ou=people,dc=ltpa,dc=com
-        UserMetadata userMetadata = new UserMetadata();
-        userMetadata.setUser(user);
-        userMetadata.setExpire(expire);
-        userMetadata.setLtpaVersion(ltpaVersion);
-        return userMetadata;
     }
 
     public void cleanLtpaToken(Request request) {
@@ -150,8 +174,8 @@ public class TokenService {
         cleanLtpaToken(request, TokenFactory.LTPA_VERSION.LTPA);
     }
 
-    private void cleanLtpaToken(Request request, TokenFactory.LTPA_VERSION ltpaVersion) {
-        addLtpaToken(request, ltpaVersion.getCookieName(), EMPTY_COOKIE_VALUE, 0);
+    private void cleanLtpaToken(Request request, TokenFactory.LTPA_VERSION version) {
+        addLtpaToken(request, version.getCookieName(), EMPTY_COOKIE_VALUE, 0);
     }
 
     private void addLtpaToken(Request request, String name, String value, int maxAge) {
@@ -164,6 +188,13 @@ public class TokenService {
             cookie.setHttpOnly(true);
         }
         request.getResponse().addCookie(cookie);
+    }
+
+    public String getUserDn(Principal principal) {
+        if (!(principal instanceof LdapPrincipal)) {
+            return null;
+        }
+        return LdapPrincipal.class.cast(principal).getDn();
     }
 
     public String getUsername(Principal principal) {
@@ -195,4 +226,5 @@ public class TokenService {
     public void setCookieDomain(String cookieDomain) {
         this.cookieDomain = cookieDomain;
     }
+
 }
