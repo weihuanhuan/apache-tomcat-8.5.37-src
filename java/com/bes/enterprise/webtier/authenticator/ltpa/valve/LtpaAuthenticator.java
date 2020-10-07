@@ -1,35 +1,49 @@
 package com.bes.enterprise.webtier.authenticator.ltpa.valve;
 
-import java.security.Principal;
-import javax.servlet.ServletException;
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletResponse;
+import com.bes.enterprise.webtier.authenticator.ltpa.utils.TokenService;
 import org.apache.catalina.Realm;
+import org.apache.catalina.Session;
 import org.apache.catalina.authenticator.AuthenticatorBase;
 import org.apache.catalina.connector.Request;
-import org.apache.catalina.realm.GenericPrincipal;
+import org.apache.catalina.connector.Response;
 import org.apache.juli.logging.Log;
 import org.apache.juli.logging.LogFactory;
 
-import com.bes.enterprise.webtier.authenticator.ltpa.utils.UserMetadata;
-import com.bes.enterprise.webtier.authenticator.ltpa.utils.TokenFactory;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.security.Principal;
 
 public class LtpaAuthenticator extends AuthenticatorBase {
 
     protected Log log = LogFactory.getLog(LtpaAuthenticator.class);
 
-    private static final String EMPTY_STRING = "";
+    protected TokenService tokenService;
 
-    private TokenFactory tokenFactory;
+    private boolean cleanTokenOnSessionInvalid;
 
-    private String uidPrefix;
-    private String cookieName;
-    private String cookieDomain;
+    private ThreadLocal<Boolean> tokenDestroy = new InheritableThreadLocal<>();
 
-    private boolean createToken;
+    @Override
+    public void invoke(Request request, Response response) throws IOException, ServletException {
+        try {
+            super.invoke(request, response);
+        } finally {
+            if (!cleanTokenOnSessionInvalid) {
+                return;
+            }
 
-    private String cookieUser;
-    private long cookieExpire;
+            Boolean destroy = tokenDestroy.get();
+            if (destroy == null) {
+                return;
+            }
+
+            if (destroy) {
+                cleanLtpaToken(request);
+            }
+            tokenDestroy.remove();
+        }
+    }
 
     @Override
     protected boolean doAuthenticate(Request request, HttpServletResponse response) {
@@ -37,7 +51,7 @@ public class LtpaAuthenticator extends AuthenticatorBase {
             return true;
         }
 
-        Principal principal = getLtpaPrincipal(request);
+        Principal principal = getPrincipal(request);
         if (principal == null) {
             if (log.isDebugEnabled()) {
                 log.debug("Failed to authenticate for request uri:" + request.getRequestURI());
@@ -45,33 +59,37 @@ public class LtpaAuthenticator extends AuthenticatorBase {
             return false;
         }
 
-        register(request, response, principal);
+        String username = tokenService.getUsername(principal);
+        String password = tokenService.getPassword(principal);
+        register(request, response, principal, getAuthMethod(), username, password);
         if (log.isDebugEnabled()) {
             log.debug("Success to authenticate for request uri:" + request.getRequestURI());
         }
         return true;
     }
 
-    private Principal getLtpaPrincipal(Request request) {
-        Cookie ltpaTokenCookie = getLtpaTokenCookie(request);
-        if (ltpaTokenCookie == null) {
-            if (log.isDebugEnabled()) {
-                log.debug("LtpaToken cookie not found!");
-            }
-            return null;
+    @Override
+    protected boolean checkForCachedAuthentication(Request request, HttpServletResponse response, boolean useSSO) {
+        if (!super.checkForCachedAuthentication(request, response, useSSO)) {
+            return false;
         }
 
-        UserMetadata userMetadata;
-        try {
-            userMetadata = tokenFactory.decodeLtpaToken(ltpaTokenCookie.getValue(), TokenFactory.LTPA_VERSION.LTPA2);
-            cookieUser = userMetadata.getUser();
-            cookieExpire = userMetadata.getExpire();
-        } catch (Exception e) {
-            log.warn("LtpaToken decode failed!", e);
-            return null;
+        String ltpaUserUid = tokenService.getCheckUserUid(request);
+        if (ltpaUserUid == null || ltpaUserUid.isEmpty()) {
+            register(request, response, null, null, null, null);
+            return false;
         }
 
-        String userUid = getUserUid(cookieUser, uidPrefix);
+        String username = tokenService.getUsername(request.getPrincipal());
+        boolean match = ltpaUserUid.equals(username);
+        if (!match) {
+            register(request, response, null, null, null, null);
+        }
+        return match;
+    }
+
+    private Principal getPrincipal(Request request) {
+        String userUid = tokenService.getLoginUserUid(request);
         if (userUid == null || userUid.isEmpty()) {
             return null;
         }
@@ -88,67 +106,21 @@ public class LtpaAuthenticator extends AuthenticatorBase {
         return principal;
     }
 
-    private Cookie getLtpaTokenCookie(Request request) {
-        Cookie[] cookies = request.getCookies();
-        if (cookies == null || cookies.length == 0) {
-            return null;
-        }
-
-        for (int i = 0; i < cookies.length; i++) {
-            if (cookies[i].getName().equals(cookieName)) {
-                return cookies[i];
-            }
-        }
-        return null;
-    }
-
-    private void register(Request request, HttpServletResponse response, Principal principal) {
-        String username = getUsername(principal);
-        String password = getPassword(principal);
-        register(request, response, principal, getAuthMethod(), username, password);
-    }
-
-    protected String getUsername(Principal principal) {
-        if (principal == null) {
-            return null;
-        }
-        return principal.getName();
-    }
-
-    protected String getPassword(Principal principal) {
-        if (!(principal instanceof GenericPrincipal)) {
-            return null;
-        }
-        return ((GenericPrincipal) principal).getPassword();
-    }
-
     @Override
     protected String getAuthMethod() {
         return "LTPA";
     }
 
     @Override
-    public void login(String username, String password, Request request) throws ServletException {
-        super.login(username, password, request);
-        if (log.isDebugEnabled()) {
-            log.debug("Success to login for request uri:" + request.getRequestURI());
-        }
-
-        if (getAuthMethod().equals(request.getAuthType())) {
-            return;
-        }
-        createLtpaCookie(request);
-    }
-
-    @Override
     protected Principal doLogin(Request request, String loginUsername, String loginPassword) throws ServletException {
-        Principal principal = getLtpaPrincipal(request);
+        Principal principal = getPrincipal(request);
         if (isLegalLogin(principal, loginUsername, loginPassword)) {
             if (log.isDebugEnabled()) {
                 log.debug("User's login info not exist or not match!");
             }
             return principal;
         }
+
         throw new ServletException(sm.getString("authenticator.loginFail"));
     }
 
@@ -156,49 +128,34 @@ public class LtpaAuthenticator extends AuthenticatorBase {
         if (principal == null) {
             return false;
         }
-        if (username != null && !username.equals(getUsername(principal))) {
+        if (username != null && !username.equals(tokenService.getUsername(principal))) {
             return false;
         }
 
-        if (password != null && !password.equals(getPassword(principal))) {
+        if (password != null && !password.equals(tokenService.getPassword(principal))) {
             return false;
         }
         return true;
     }
 
-    protected void createLtpaCookie(Request request) {
-        if (!createToken || cookieUser == null) {
-            return;
-        }
-        String userUid = getUserUid(cookieUser, uidPrefix);
-        if (userUid == null || !userUid.equals(getUsername(request.getPrincipal()))) {
+    @Override
+    public void register(Request request, HttpServletResponse response, Principal principal, String authType, String username, String password) {
+        super.register(request, response, principal, authType, username, password);
+
+        if (!cleanTokenOnSessionInvalid) {
             return;
         }
 
-        //user\:FederatedRealm/uid=tomcat,ou=people,dc=ltpa,dc=com
-        //username = "user\\:FederatedRealm/" + uidPrefix + "=" + username + ",ou=people,dc=ltpa,dc=com";
-        String username = cookieUser;
-        UserMetadata userMetadata = new UserMetadata();
-        userMetadata.setExpire(cookieExpire);
-        userMetadata.setUser(username);
-        userMetadata.setLtpaVersion(TokenFactory.LTPA_VERSION.LTPA2);
-
-        try {
-            String token = tokenFactory.encodeLTPAToken(userMetadata, userMetadata.getLtpaVersion());
-            addLtpaToken(request, token, (int) userMetadata.getExpire());
-        } catch (Exception e) {
-            log.warn("Failed to encode LtpaToken for user: " + username, e);
+        if (principal == null) {
             return;
         }
-    }
+        authenticated();
 
-    private String getUserUid(String user, String uidPrefix) {
-        String userUid = null;
-        int indexOf = user.indexOf(uidPrefix + "=");
-        if (indexOf != -1) {
-            userUid = user.substring(indexOf + (uidPrefix + "=").length(), user.indexOf(",", indexOf));
+        Session sessionInternal = request.getSessionInternal(false);
+        if (sessionInternal == null) {
+            return;
         }
-        return userUid;
+        sessionInternal.addSessionListener(new LtpaSessionListener());
     }
 
     @Override
@@ -212,38 +169,25 @@ public class LtpaAuthenticator extends AuthenticatorBase {
     }
 
     private void cleanLtpaToken(Request request) {
-        addLtpaToken(request, EMPTY_STRING, 0);
+        tokenService.cleanLtpaToken(request);
     }
 
-    private void addLtpaToken(Request request, String value, int maxAge) {
-        Cookie cookie = new Cookie(cookieName, value);
-        cookie.setMaxAge(maxAge);
-        cookie.setPath("/");
-        cookie.setSecure(request.isSecure());
-        cookie.setDomain(cookieDomain);
-        if (request.getServletContext().getSessionCookieConfig().isHttpOnly() || request.getContext().getUseHttpOnly()) {
-            cookie.setHttpOnly(true);
+    private void authenticated() {
+        tokenDestroy.set(false);
+    }
+
+    public void sessionDestroyed(Session session) {
+        if (!cleanTokenOnSessionInvalid) {
+            return;
         }
-        request.getResponse().addCookie(cookie);
+        tokenDestroy.set(true);
     }
 
-    public void setTokenFactory(TokenFactory tokenFactory) {
-        this.tokenFactory = tokenFactory;
+    public void setTokenService(TokenService tokenService) {
+        this.tokenService = tokenService;
     }
 
-    public void setUidPrefix(String uidPrefix) {
-        this.uidPrefix = uidPrefix;
-    }
-
-    public void setCookieName(String cookieName) {
-        this.cookieName = cookieName;
-    }
-
-    public void setCookieDomain(String cookieDomain) {
-        this.cookieDomain = cookieDomain;
-    }
-
-    public void setCreateToken(boolean createToken) {
-        this.createToken = createToken;
+    public void setCleanTokenOnSessionInvalid(boolean cleanTokenOnSessionInvalid) {
+        this.cleanTokenOnSessionInvalid = cleanTokenOnSessionInvalid;
     }
 }

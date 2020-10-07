@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import javax.servlet.ServletException;
 
+import com.bes.enterprise.webtier.authenticator.ltpa.utils.TokenService;
 import org.apache.catalina.Authenticator;
 import org.apache.catalina.Contained;
 import org.apache.catalina.Container;
@@ -23,21 +24,24 @@ import com.bes.enterprise.webtier.authenticator.ltpa.utils.TokenFactory;
 
 public class LtpaConfigValve extends ValveBase {
 
-    private static final Log log = LogFactory.getLog(LtpaConfigValve.class);
+    private static final String DEFAULT_KEYS_FILE = "ltpa.keys";
+    private static final String DEFAULT_UID_PREFIX = "uid";
+
+    private Log log = LogFactory.getLog(LtpaConfigValve.class);
 
     private TokenFactory tokenFactory;
 
     private boolean useLtpa = true;
     private boolean useDelegate = true;
-
-    private String keyPassword;
-    private String keysFile = "ltpa.keys";
-
-    private String uidPrefix = "uid";
-    private String cookieName = "LtpaToken2";
-    private String cookieDomain;
-
     private boolean createToken = false;
+    private boolean interoperability = true;
+    private boolean cleanTokenOnSessionInvalid = false;
+
+    private String keysFile;
+    private String keyPassword;
+
+    private String uidPrefix;
+    private String cookieDomain;
 
     @Override
     protected void initInternal() throws LifecycleException {
@@ -45,11 +49,28 @@ public class LtpaConfigValve extends ValveBase {
         if (!useLtpa || !(container instanceof Context)) {
             return;
         }
-        initLtpaKeyUtils();
+
+        initLtpaKeyFactory();
+
+        if (uidPrefix == null) {
+            uidPrefix = DEFAULT_UID_PREFIX;
+            log.info("No uidPrefix configured, so automatically use the application default value:" + uidPrefix);
+        }
+
+        if (cookieDomain == null) {
+            String sessionCookieDomain = Context.class.cast(container).getSessionCookieDomain();
+            cookieDomain = sessionCookieDomain == null ? "" : sessionCookieDomain;
+            log.info("No cookieDomain configured, so automatically use the application default value:" + cookieDomain);
+        }
     }
 
-    private void initLtpaKeyUtils() {
+    private void initLtpaKeyFactory() {
         try {
+            if (keysFile == null || keyPassword.isEmpty()) {
+                keysFile = DEFAULT_KEYS_FILE;
+                log.info("No keysFile configured, so automatically use the application default value:" + keysFile);
+            }
+
             Path keysFilePath;
             if (!Paths.get(keysFile).isAbsolute()) {
                 keysFilePath = Paths.get(System.getProperty("catalina.home"), "conf", keysFile);
@@ -84,8 +105,9 @@ public class LtpaConfigValve extends ValveBase {
         }
 
         Authenticator authenticator = context.getAuthenticator();
-        if (authenticator == null) {
-            return;
+        if (useDelegate && authenticator == null) {
+            useDelegate = false;
+            log.info("No authenticator configured, so automatically fix the useDelegate value to:" + useDelegate);
         }
 
         Valve ltpaAuthenticator = createLtpaAuthenticator(authenticator);
@@ -96,19 +118,22 @@ public class LtpaConfigValve extends ValveBase {
     }
 
     private Valve createLtpaAuthenticator(Authenticator authenticator) {
-        LtpaAuthenticator ltpaAuthenticator;
-        if (useDelegate) {
-            ltpaAuthenticator = new LtpaDelegateAuthenticator();
-            ((LtpaDelegateAuthenticator) ltpaAuthenticator).setDelegate(authenticator);
-        } else {
-            ltpaAuthenticator = new LtpaAuthenticator();
-        }
+        TokenService tokenService = new TokenService();
+        tokenService.setTokenFactory(tokenFactory);
+        tokenService.setUidPrefix(uidPrefix);
+        tokenService.setCookieDomain(cookieDomain);
+        tokenService.setInteroperability(interoperability);
 
-        ltpaAuthenticator.setTokenFactory(tokenFactory);
-        ltpaAuthenticator.setUidPrefix(uidPrefix);
-        ltpaAuthenticator.setCookieName(cookieName);
-        ltpaAuthenticator.setCookieDomain(cookieDomain);
-        ltpaAuthenticator.setCreateToken(createToken);
+        LtpaAuthenticator ltpaAuthenticator;
+        if (!useDelegate) {
+            ltpaAuthenticator = new LtpaAuthenticator();
+        } else {
+            ltpaAuthenticator = new LtpaDelegateAuthenticator();
+            LtpaDelegateAuthenticator.class.cast(ltpaAuthenticator).setDelegate(authenticator);
+            LtpaDelegateAuthenticator.class.cast(ltpaAuthenticator).setCreateToken(createToken);
+        }
+        ltpaAuthenticator.setTokenService(tokenService);
+        ltpaAuthenticator.setCleanTokenOnSessionInvalid(cleanTokenOnSessionInvalid);
         return ltpaAuthenticator;
     }
 
@@ -154,27 +179,31 @@ public class LtpaConfigValve extends ValveBase {
         this.useDelegate = useDelegate;
     }
 
-    public void setKeyPassword(String keyPassword) {
-        this.keyPassword = keyPassword;
+    public void setCreateToken(boolean createToken) {
+        this.createToken = createToken;
+    }
+
+    public void setInteroperability(boolean interoperability) {
+        this.interoperability = interoperability;
+    }
+
+    public void setCleanTokenOnSessionInvalid(boolean cleanTokenOnSessionInvalid) {
+        this.cleanTokenOnSessionInvalid = cleanTokenOnSessionInvalid;
     }
 
     public void setKeysFile(String keysFile) {
         this.keysFile = keysFile;
     }
 
+    public void setKeyPassword(String keyPassword) {
+        this.keyPassword = keyPassword;
+    }
+
     public void setUidPrefix(String uidPrefix) {
         this.uidPrefix = uidPrefix;
     }
 
-    public void setCookieName(String cookieName) {
-        this.cookieName = cookieName;
-    }
-
     public void setCookieDomain(String cookieDomain) {
         this.cookieDomain = cookieDomain;
-    }
-
-    public void setCreateToken(boolean createToken) {
-        this.createToken = createToken;
     }
 }

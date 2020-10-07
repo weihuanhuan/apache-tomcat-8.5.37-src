@@ -19,6 +19,7 @@ import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.DESedeKeySpec;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+
 import org.apache.tomcat.util.codec.binary.Base64;
 
 /**
@@ -38,8 +39,33 @@ public class TokenFactory {
      * LTPA Versions
      */
     public enum LTPA_VERSION {
-        LTPA,
-        LTPA2
+        LTPA("LtpaToken"),
+        LTPA2("LtpaToken2"),
+        UNKNOWN("Unknown");
+
+        private final String cookieName;
+
+        LTPA_VERSION(String cookieName) {
+            this.cookieName = cookieName;
+        }
+
+        public String getCookieName() {
+            return this.cookieName;
+        }
+
+        @Override
+        public String toString() {
+            return this.cookieName;
+        }
+
+        public static LTPA_VERSION getVersionByName(String cookieName) {
+            for (LTPA_VERSION ltpaVersion : LTPA_VERSION.values()) {
+                if (ltpaVersion.getCookieName().equals(cookieName)) {
+                    return ltpaVersion;
+                }
+            }
+            return UNKNOWN;
+        }
     }
 
     /**
@@ -51,10 +77,9 @@ public class TokenFactory {
 
         private final String text;
 
-        private CRIPTING_ALGORITHM(String text) {
+        CRIPTING_ALGORITHM(String text) {
             this.text = text;
         }
-
 
         @Override
         public String toString() {
@@ -336,15 +361,19 @@ public class TokenFactory {
         return new UserMetadata(plainToken, version);
     }
 
+    public String encodeLTPAToken(UserMetadata userMetadata) throws Exception {
+        return encodeLTPAToken(userMetadata, userMetadata.getLtpaVersion());
+    }
+
     /**
      * Encode a given usermetadata object into a LTPA Token v1 or v2
      *
-     * @param userData
+     * @param userMetadata
      * @param version
      * @return
      * @throws Exception
      */
-    public String encodeLTPAToken(UserMetadata userData, LTPA_VERSION version) throws Exception {
+    public String encodeLTPAToken(UserMetadata userMetadata, LTPA_VERSION version) throws Exception {
         // lets start by recovering the private key, which is encrypted
         LTPAPrivateKey ltpaPrivKey = new LTPAPrivateKey(getSecretKey(this.privateKey, this.keyPassword));
         byte[][] rawKey = ltpaPrivKey.getRawKey();
@@ -352,7 +381,7 @@ public class TokenFactory {
 
         // new lets prepare to prepare the signature
         MessageDigest md1JCE = MessageDigest.getInstance("SHA");
-        byte[] plainUserDataBytes = md1JCE.digest(userData.getPlainUserMetadata().getBytes());
+        byte[] plainUserDataBytes = md1JCE.digest(userMetadata.getPlainUserMetadata().getBytes());
 
         // lets sign the hash created previously with the private key
         byte[] encodedSignatureBytes = null;
@@ -382,8 +411,8 @@ public class TokenFactory {
 
         // now, lets create the plain text version of the token
         StringBuffer token = new StringBuffer();
-        token.append(userData.getPlainUserMetadata()).append("%");
-        token.append(userData.getExpire()).append("%");
+        token.append(userMetadata.getPlainUserMetadata()).append("%");
+        token.append(userMetadata.getExpire()).append("%");
         token.append(base64Signature);
 
         // finally lets crypt everything with the private key and then
