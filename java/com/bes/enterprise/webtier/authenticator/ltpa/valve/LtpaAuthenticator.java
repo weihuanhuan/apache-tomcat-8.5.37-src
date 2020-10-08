@@ -76,13 +76,32 @@ public class LtpaAuthenticator extends AuthenticatorBase {
 
         String ltpaUserUid = tokenService.getUserUid(request);
         if (ltpaUserUid == null || ltpaUserUid.isEmpty()) {
-            register(request, response, null, null, null, null);
+            //当存在本应用的缓冲认证记录，却没有对应的 ltpa token cookie 存在时判定登录状态为无效的状态，此时需要重新执行登录。
+            //为了防止其后的 authenticator 仍旧从 cache 中获取认证信息，进而错误的认为此时应用处于登录状态，所以我们要清除认证状态
+
+            //但是，当进行真实的表单登录时，其存在 login 阶段和 restore 原始请求的恢复阶段，这俩个阶段处理并都会触发 context valve 的调用。
+            //所以这里再清除登录状态的时候要区分这种情况，防止 ltpa 意外的清除正常 FORM 登录过程中 login 阶段设置的登录信息，使得 restore 阶段无法进行。
+            //最终导致 FORM 认证无法正确的处理。
+            //新版 tomcat 会有上面问题，因为其 FROM 认证的 login 阶段会对 principal 进行 register 处理。
+            //参考
+            //org.apache.catalina.authenticator.FormAuthenticator.doAuthenticate
+            //  login 转向 restore 阶段
+            //  org.apache.catalina.connector.Response.sendRedirect(java.lang.String, int)
+            //  确认 restore 阶段的 uri 并执行 restore，这里避免清除的登录状态就是 matchRequest 时需要的。
+            //  org.apache.catalina.authenticator.FormAuthenticator.matchRequest
+            //  org.apache.catalina.authenticator.FormAuthenticator.restoreRequest
+
+            //由于我们的 ltpa 认证实现不论原始认证是什么，我们自身都会进行主动 register ，其会刷新认证方法为 ltps 的方法，
+            //因此我们可以通过 Request.getAuthType 来避免对其他原始 authenticator 的认证过程干扰。
+            if (getAuthMethod().equals(request.getAuthType())) {
+                register(request, response, null, null, null, null);
+            }
             return false;
         }
 
         String username = tokenService.getUsername(request.getPrincipal());
         boolean match = ltpaUserUid.equals(username);
-        if (!match) {
+        if (!match && getAuthMethod().equals(request.getAuthType())) {
             register(request, response, null, null, null, null);
         }
         return match;
