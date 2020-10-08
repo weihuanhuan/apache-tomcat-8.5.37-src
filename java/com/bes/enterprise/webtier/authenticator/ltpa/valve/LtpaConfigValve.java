@@ -34,14 +34,13 @@ public class LtpaConfigValve extends ValveBase {
     private boolean useLtpa = true;
     private String keysFile;
     private String keyPassword;
+    private String realm;
     private String uidPrefix;
     private String cookieDomain;
-
-    private boolean createToken = true;
-    private String realm;
     private String expiration;
 
     private boolean useDelegate = true;
+    private boolean createToken = true;
     private boolean interoperability = true;
     private boolean cleanTokenOnSessionInvalid = false;
 
@@ -50,11 +49,6 @@ public class LtpaConfigValve extends ValveBase {
         super.initInternal();
         if (!useLtpa || !(container instanceof Context)) {
             return;
-        }
-
-        if (keysFile == null || keyPassword.isEmpty()) {
-            keysFile = DEFAULT_KEYS_FILE;
-            log.info("No keysFile configured, so automatically use the application default value:" + keysFile);
         }
 
         if (uidPrefix == null) {
@@ -75,6 +69,10 @@ public class LtpaConfigValve extends ValveBase {
             log.info("Invalid expiration configured, so automatically use the application default value:" + expiration);
         }
 
+        if (keysFile == null || keysFile.isEmpty()) {
+            keysFile = DEFAULT_KEYS_FILE;
+            log.info("No keysFile configured, so automatically use the application default value:" + keysFile);
+        }
         initTokenFactory();
     }
 
@@ -88,17 +86,7 @@ public class LtpaConfigValve extends ValveBase {
             }
 
             tokenFactory = new TokenFactory(keysFilePath.toAbsolutePath().toString());
-            tokenFactory.setExpiration(Long.parseLong(expiration));
-
-            if (keyPassword != null && !keyPassword.isEmpty()) {
-                tokenFactory.setKeyPassword(keyPassword);
-            }
-
-            if (realm != null && !realm.isEmpty()) {
-                tokenFactory.setRealm(realm);
-            }
-
-            tokenFactory.isValidKeys();
+            tokenFactory.isValidKeys(keyPassword);
         } catch (Exception e) {
             useLtpa = false;
             log.error("Failed to config ltpa token keys, so we do not use ltpa token for authentication!", e);
@@ -137,8 +125,10 @@ public class LtpaConfigValve extends ValveBase {
         TokenService tokenService = new TokenService();
         tokenService.setTokenFactory(tokenFactory);
         tokenService.setInteroperability(interoperability);
+        tokenService.setRealm(realm);
         tokenService.setUidPrefix(uidPrefix);
         tokenService.setCookieDomain(cookieDomain);
+        tokenService.setExpiration(Long.parseLong(expiration));
 
         LtpaAuthenticator ltpaAuthenticator;
         if (!useDelegate) {

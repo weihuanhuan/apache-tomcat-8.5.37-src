@@ -2,6 +2,7 @@ package com.bes.enterprise.webtier.authenticator.ltpa.utils;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.InputStream;
 import java.math.BigInteger;
 import java.security.Key;
 import java.security.KeyFactory;
@@ -31,12 +32,9 @@ public class TokenFactory {
     private final Base64 decoder = new Base64();
     private final Base64 encoder = new Base64();
 
-    private String sharedKey;
-    private String keyPassword;
-    private String privateKey;
-
     private String realm;
-    private long expiration;
+    private String sharedKey;
+    private String privateKey;
 
     private byte[] sharedSecretKey;
     private byte[][] privateRawKey;
@@ -107,32 +105,24 @@ public class TokenFactory {
      */
     public TokenFactory(String propertiesFileName) throws Exception {
         Properties prop = new Properties();
-        prop.load(new FileInputStream(new File(propertiesFileName)));
-        this.keyPassword = prop.getProperty("com.ibm.websphere.ltpa.KeyPassword");
-        this.privateKey = prop.getProperty("com.ibm.websphere.ltpa.PrivateKey");
-        this.sharedKey = prop.getProperty("com.ibm.websphere.ltpa.3DESKey");
+        try (InputStream is = new FileInputStream(new File(propertiesFileName))) {
+            prop.load(is);
+        }
         this.realm = prop.getProperty("com.ibm.websphere.ltpa.Realm");
-    }
-
-    public void setKeyPassword(String keyPassword) {
-        this.keyPassword = keyPassword;
-    }
-
-    public void setRealm(String realm) {
-        this.realm = realm;
+        this.sharedKey = prop.getProperty("com.ibm.websphere.ltpa.3DESKey");
+        this.privateKey = prop.getProperty("com.ibm.websphere.ltpa.PrivateKey");
     }
 
     public String getRealm() {
         return realm;
     }
 
-    public void setExpiration(long expiration) {
-        this.expiration = expiration;
-    }
-
-    public boolean isValidKeys() throws Exception {
+    public boolean isValidKeys(String keyPassword) throws Exception {
         if (keyPassword == null || keyPassword.isEmpty()) {
             throw new Exception("Invalid key password");
+        }
+        if (realm == null || realm.isEmpty()) {
+            throw new Exception("Invalid realm");
         }
         if (sharedKey == null || sharedKey.isEmpty()) {
             throw new Exception("Invalid shared key");
@@ -142,8 +132,8 @@ public class TokenFactory {
         }
 
         // lets start by recovering the private key, which is encrypted
-        sharedSecretKey = getSecretKey(this.sharedKey, this.keyPassword);
-        byte[] privateSecretKey = getSecretKey(this.privateKey, this.keyPassword);
+        sharedSecretKey = getSecretKey(this.sharedKey, keyPassword);
+        byte[] privateSecretKey = getSecretKey(this.privateKey, keyPassword);
         LTPAPrivateKey ltpaPrivateKey = new LTPAPrivateKey(privateSecretKey);
         privateRawKey = ltpaPrivateKey.getRawKey();
         setRSAKey(privateRawKey);
@@ -161,7 +151,7 @@ public class TokenFactory {
         throw new Exception("Invalid ltpa keys");
     }
 
-    public UserMetadata createUserMetadata(LTPA_VERSION ltpaVersion, String user) {
+    public UserMetadata createUserMetadata(LTPA_VERSION ltpaVersion, long expiration, String user) {
         long expirationInMilliseconds = System.currentTimeMillis() + expiration * 1000;
 
         UserMetadata userMetadata = new UserMetadata();

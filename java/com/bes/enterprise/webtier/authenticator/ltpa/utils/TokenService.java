@@ -18,29 +18,19 @@ public class TokenService {
     private TokenFactory tokenFactory;
     private boolean interoperability;
 
+    private String realm;
     private String uidPrefix;
     private String cookieDomain;
+    private long expiration;
 
-    private String cookieRealm;
-
-    public String getCheckUserUid(Request request) {
-        return getUserUid(request, false);
-    }
-
-    public String getLoginUserUid(Request request) {
-        return getUserUid(request, true);
-    }
-
-    private String getUserUid(Request request, boolean update) {
+    public String getUserUid(Request request) {
         UserMetadata userMetaData = getUserMetaData(request);
         if (userMetaData == null) {
             return null;
         }
 
-        if (update) {
-            cookieRealm = extraCookieRealm(userMetaData.getUser());
-        }
-        return getUserUidValue(userMetaData.getUser());
+        String user = TokenFieldHelper.unescape(userMetaData.getUser());
+        return getUserUidValue(user);
     }
 
     private UserMetadata getUserMetaData(Request request) {
@@ -84,28 +74,6 @@ public class TokenService {
         return null;
     }
 
-    private String extraCookieRealm(String user) {
-        int start = user.indexOf(":") + 1;
-        if (start <= 0) {
-            return null;
-        }
-
-        int end = user.indexOf("/" + uidPrefix);
-        if (end < 0) {
-            return null;
-        }
-
-        if (start >= end) {
-            return null;
-        }
-
-        String cookieRealm = user.substring(start, end);
-        if (log.isDebugEnabled()) {
-            log.debug(String.format("Extra cookie realm:%s from ltpa user:%s.", cookieRealm, user));
-        }
-        return cookieRealm;
-    }
-
     private String getUserUidValue(String user) {
         String userUidValue = null;
         int indexOf = user.indexOf(uidPrefix + "=");
@@ -137,26 +105,24 @@ public class TokenService {
     }
 
     private String generateLtpaUser(String userDn) {
-        String realm;
-        if (cookieRealm != null && !cookieRealm.isEmpty()) {
-            realm = cookieRealm;
-        } else {
-            realm = tokenFactory.getRealm();
+        String tokenRealm = TokenFieldHelper.escape(realm);
+        if (tokenRealm == null || tokenRealm.isEmpty()) {
+            tokenRealm = tokenFactory.getRealm();
         }
 
         //user\:FederatedRealm/uid=tomcat,ou=people,dc=ltpa,dc=com
         StringBuffer stringBuffer = new StringBuffer();
         stringBuffer.append("user");
-        stringBuffer.append("\\:");
-        stringBuffer.append(realm);
+        stringBuffer.append(TokenFieldHelper.escape(":"));
+        stringBuffer.append(tokenRealm);
         stringBuffer.append("/");
-        stringBuffer.append(userDn);
+        stringBuffer.append(TokenFieldHelper.escape(userDn));
         return stringBuffer.toString();
     }
 
     private void createLtpaCookie(Request request, String user, TokenFactory.LTPA_VERSION version) {
         try {
-            UserMetadata userMetadata = tokenFactory.createUserMetadata(version, user);
+            UserMetadata userMetadata = tokenFactory.createUserMetadata(version, expiration, user);
             String cookieValue = tokenFactory.encodeLTPAToken(userMetadata);
             addLtpaToken(request, version.getCookieName(), cookieValue, -1);
         } catch (Exception e) {
@@ -219,6 +185,10 @@ public class TokenService {
         this.interoperability = interoperability;
     }
 
+    public void setRealm(String realm) {
+        this.realm = realm;
+    }
+
     public void setUidPrefix(String uidPrefix) {
         this.uidPrefix = uidPrefix;
     }
@@ -227,4 +197,7 @@ public class TokenService {
         this.cookieDomain = cookieDomain;
     }
 
+    public void setExpiration(long expiration) {
+        this.expiration = expiration;
+    }
 }

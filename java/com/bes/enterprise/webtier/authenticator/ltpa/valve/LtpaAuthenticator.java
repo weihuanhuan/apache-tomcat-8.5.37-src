@@ -74,7 +74,7 @@ public class LtpaAuthenticator extends AuthenticatorBase {
             return false;
         }
 
-        String ltpaUserUid = tokenService.getCheckUserUid(request);
+        String ltpaUserUid = tokenService.getUserUid(request);
         if (ltpaUserUid == null || ltpaUserUid.isEmpty()) {
             register(request, response, null, null, null, null);
             return false;
@@ -89,7 +89,7 @@ public class LtpaAuthenticator extends AuthenticatorBase {
     }
 
     private Principal getPrincipal(Request request) {
-        String userUid = tokenService.getLoginUserUid(request);
+        String userUid = tokenService.getUserUid(request);
         if (userUid == null || userUid.isEmpty()) {
             return null;
         }
