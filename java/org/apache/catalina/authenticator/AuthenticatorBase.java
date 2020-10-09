@@ -729,7 +729,7 @@ public abstract class AuthenticatorBase extends ValveBase
      * @return {@code true} if authenticate() must be called, otherwise
      *         {@code false}
      */
-    protected boolean isContinuationRequired(Request request) {
+    public boolean isContinuationRequired(Request request) {
         return false;
     }
 

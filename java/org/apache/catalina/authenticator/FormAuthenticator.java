@@ -344,7 +344,7 @@ public class FormAuthenticator
 
 
     @Override
-    protected boolean isContinuationRequired(Request request) {
+    public boolean isContinuationRequired(Request request) {
         // Special handling for form-based logins to deal with the case
         // where the login form (and therefore the "j_security_check" URI
         // to which it submits) might be outside the secured area
