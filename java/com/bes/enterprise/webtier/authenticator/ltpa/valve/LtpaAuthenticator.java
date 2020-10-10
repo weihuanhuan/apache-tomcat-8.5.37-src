@@ -134,12 +134,11 @@ public class LtpaAuthenticator extends AuthenticatorBase {
     protected Principal doLogin(Request request, String loginUsername, String loginPassword) throws ServletException {
         Principal principal = getPrincipal(request);
         if (isLegalLogin(principal, loginUsername, loginPassword)) {
-            if (log.isDebugEnabled()) {
-                log.debug("User's login info not exist or not match!");
-            }
             return principal;
         }
-
+        if (log.isDebugEnabled()) {
+            log.debug("Ltpa token cookie not exist or not match with user provided info!");
+        }
         throw new ServletException(sm.getString("authenticator.loginFail"));
     }
 
