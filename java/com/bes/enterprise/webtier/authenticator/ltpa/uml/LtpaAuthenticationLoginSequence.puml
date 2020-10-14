@@ -1,0 +1,54 @@
+@startuml
+'style
+title ltpa login authentication sequence
+hide footbox
+
+'participant
+actor User
+participant Request
+participant LtpaAuthenticator
+participant Authenticator
+participant TokenService
+participant TokenFactory
+database LDAP
+participant Response
+
+User -> Request : login(user,passwd);
+Request -> LtpaAuthenticator : doLogin();
+LtpaAuthenticator -> TokenService : getUserUid();
+TokenService -> Request : getCookies();
+Request --> TokenService : cookies
+TokenService -> TokenService : getLtpaTokenCookie();
+TokenService -> TokenFactory : decodeLtpaToken();
+TokenFactory --> TokenService
+TokenService --> LtpaAuthenticator : userUid
+alt user info match
+    LtpaAuthenticator -> LtpaAuthenticator : register(user);
+    LtpaAuthenticator --> Request : login success
+    Request --> User : welcome page
+else user info mismatch
+    LtpaAuthenticator -> Authenticator : login(user,passwd);
+    Authenticator -> LDAP : execute authenticate
+    LDAP --> Authenticator : authenticate result
+    alt result == success
+        Authenticator --> LtpaAuthenticator : register(user);
+        LtpaAuthenticator -> TokenService : createLtpaCookie();
+        TokenService -> TokenFactory : encodeLTPAToken();
+        TokenFactory --> TokenService : LtpaToken cookie
+        TokenService -> Request : getResponse();
+        Request --> TokenService : response
+        TokenService -> Response : addCookie(LtpaToken,maxAge=-1);
+        Response --> TokenService
+        TokenService --> LtpaAuthenticator
+        LtpaAuthenticator --> Request : login success
+    Request --> User : welcome page
+    else result == failed
+        Authenticator --> LtpaAuthenticator
+        LtpaAuthenticator --> Request : login failed
+        Request --> User : error page
+    end
+end
+
+
+
+@enduml

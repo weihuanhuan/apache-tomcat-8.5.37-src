@@ -1,0 +1,26 @@
+@startuml
+title ltpa authentication component
+
+package "client"{
+    cloud browser
+    browser -> WAS : access
+}
+
+package "user info" {
+    database ldap
+}
+
+package "server" {
+    frame ltpa.keys
+    node "WAS"{
+        [WAS_A]
+        [WAS_B]
+    }
+    WAS_A --> ltpa.keys : read
+    WAS_B --> ltpa.keys : read
+
+    WAS_A -> ldap : query
+    WAS_B -> ldap : query
+}
+
+@enduml

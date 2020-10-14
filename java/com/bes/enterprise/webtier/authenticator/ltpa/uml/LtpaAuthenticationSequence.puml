@@ -1,0 +1,35 @@
+@startuml
+'style
+title ltpa authentication sequence
+hide footbox
+
+== WAS_A ==
+browser -> server:  request resource
+server --> browser: login page
+browser --> server: user info
+server -> ldap: check user
+ldap --> server: check result
+alt result == success
+    server -> server:  encode ltpa cookie
+    browser <-- server: response resource with ltpa cookie
+else result == failed
+    server --> browser: login page
+end
+
+== WAS_B ==
+browser -> server:  request resource
+
+alt exist ltpa cookie
+    server -> server:  decode ltpa cookie
+    server -> ldap: check user
+    ldap --> server: check result
+    alt result == success
+        browser <-- server: response resource
+    else result == failed
+        server --> browser: login page
+    end
+else non-exist ltpa cookie
+    server --> browser: login page
+end
+
+@enduml
