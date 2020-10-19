@@ -83,10 +83,16 @@ public class Response implements HttpServletResponse {
      */
     private static final boolean ENFORCE_ENCODING_IN_GET_WRITER;
 
+    private static final boolean IGNORE_APP_COMMITED;
+
     static {
         ENFORCE_ENCODING_IN_GET_WRITER = Boolean.parseBoolean(
                 System.getProperty("org.apache.catalina.connector.Response.ENFORCE_ENCODING_IN_GET_WRITER",
                         "true"));
+
+        IGNORE_APP_COMMITED = Boolean.parseBoolean(
+                System.getProperty("org.apache.catalina.connector.Response.IGNORE_APP_COMMITED",
+                        "false"));
     }
 
 
@@ -335,9 +341,14 @@ public class Response implements HttpServletResponse {
      * @return <code>true</code> if the application has committed the response
      */
     public boolean isAppCommitted() {
-        return (this.appCommitted || isCommitted() || isSuspended()
+        boolean original = (this.appCommitted || isCommitted() || isSuspended()
                 || ((getContentLength() > 0)
-                    && (getContentWritten() >= getContentLength())));
+                && (getContentWritten() >= getContentLength())));
+
+        if (IGNORE_APP_COMMITED && original && !isCommitted() && getBytesWritten(false) == 0) {
+            return false;
+        }
+        return original;
     }
 
 
