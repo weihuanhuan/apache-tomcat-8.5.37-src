@@ -83,15 +83,15 @@ public class Response implements HttpServletResponse {
      */
     private static final boolean ENFORCE_ENCODING_IN_GET_WRITER;
 
-    private static final boolean IGNORE_APP_COMMITED;
+    private static final boolean IGNORE_APP_COMMITTED;
 
     static {
         ENFORCE_ENCODING_IN_GET_WRITER = Boolean.parseBoolean(
                 System.getProperty("org.apache.catalina.connector.Response.ENFORCE_ENCODING_IN_GET_WRITER",
                         "true"));
 
-        IGNORE_APP_COMMITED = Boolean.parseBoolean(
-                System.getProperty("org.apache.catalina.connector.Response.IGNORE_APP_COMMITED",
+        IGNORE_APP_COMMITTED = Boolean.parseBoolean(
+                System.getProperty("org.apache.catalina.connector.Response.IGNORE_APP_COMMITTED",
                         "false"));
     }
 
@@ -345,7 +345,21 @@ public class Response implements HttpServletResponse {
                 || ((getContentLength() > 0)
                 && (getContentWritten() >= getContentLength())));
 
-        if (IGNORE_APP_COMMITED && original && !isCommitted() && getBytesWritten(false) == 0) {
+        /**
+         * ignoreAppCommitted 是个控制选项是否这么处理
+         * original 代表原始的状态。
+         * !isCommitted() && getBytesWritten(false) == 0 代表附加的 提交判断状态，
+         * 其中 isCommitted 是底层响应提交数据时设置的，
+         * 而   getBytesWritten 可以获取写入到浏览器的数据量，但是不包括 header 的数据，但是头的数据要写的话肯定会触发 isCommitted  为 true
+         * 所以我们可以判断服务器确实还没有向浏览器写入数据.
+
+         * 根据用例里面的逻辑，当前这里的判断其实还在应用层次的提交，而不是上述俩个条件判断的连接层次的提交，此时我们还是可以撤回响应的。
+         * 因此我们这里可以返回 false ,这样导致在随后执行的 org.apache.catalina.connector.Response#sendRedirect(java.lang.String, int) 调用将可以正常的处理，
+         * 而在 sendRedirect 的调用流程中他会先清理先前的处理的响应数据，由于真实连接中数据还没提交，所以即使清理了也没事，然后就正常执行重定向了。
+
+         * 而当真实的连接中有任何数据已经写入到浏览器端之后我们撤销响应数据了，因此此时浏览器已经接收了响应的数据在处理了。
+         */
+        if (IGNORE_APP_COMMITTED && original && !isCommitted() && getBytesWritten(false) == 0) {
             return false;
         }
         return original;
